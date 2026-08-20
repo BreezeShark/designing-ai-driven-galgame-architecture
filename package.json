@@ -2,11 +2,13 @@
   "name": "nextjs-postgresql-template",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/sync-characters.mjs && next dev",
+    "build": "node scripts/sync-characters.mjs && next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "sync:girls": "node scripts/sync-characters.mjs",
+    "db": "node scripts/dev-db.mjs"
   },
   "dependencies": {
     "dotenv": "17.3.1",
@@ -23,6 +25,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "drizzle-kit": "0.31.10",
+    "embedded-postgres": "^18.4.0-beta.17",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
     "postcss": "8.5.8",

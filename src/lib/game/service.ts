@@ -10,8 +10,9 @@ import {
   type MessageRow,
   type PendingChoice,
 } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { CHARACTER_SEEDS } from "@/lib/data/characters";
+import { ensureGirlCharacters, getGirlGalleries, getSpritesByCharacterId } from "@/lib/characters/gallery";
 import { getCharacterReply } from "@/lib/ai/character";
 import { getDirectorUpdate } from "@/lib/ai/director";
 import { updateMemorySummary } from "@/lib/ai/memory";
@@ -29,26 +30,42 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export async function ensureCharactersSeeded(): Promise<Character[]> {
-  // Seed the built-in cast ONLY when the table is completely empty, so that
-  // heroines deleted (or fully replaced) via the settings page stay deleted.
-  const existing = await db.select().from(characters);
-  if (existing.length > 0) return existing.sort((a, b) => a.sortOrder - b.sortOrder);
+  // Prefer a real cover photo from love_girls/ for the seeded avatar.
+  const manifest = await getGirlGalleries();
+  const coverFor = (id: string, fallback: string) =>
+    manifest.girls.find((g) => g.id === id)?.cover ?? fallback;
 
-  await db
-    .insert(characters)
-    .values(
-      CHARACTER_SEEDS.map((c) => ({
-        id: c.id,
-        name: c.name,
-        subtitle: c.subtitle,
-        avatarUrl: c.avatarUrl,
-        accentColor: c.accentColor,
-        persona: c.persona,
-        speechStyle: c.speechStyle,
-        sortOrder: c.sortOrder,
-      })),
-    )
-    .onConflictDoNothing({ target: characters.id });
+  const existing = await db.select().from(characters);
+  if (existing.length === 0) {
+    await db
+      .insert(characters)
+      .values(
+        CHARACTER_SEEDS.map((c) => ({
+          id: c.id,
+          name: c.name,
+          subtitle: c.subtitle,
+          avatarUrl: coverFor(c.id, c.avatarUrl),
+          accentColor: c.accentColor,
+          persona: c.persona,
+          speechStyle: c.speechStyle,
+          sortOrder: c.sortOrder,
+        })),
+      )
+      .onConflictDoNothing({ target: characters.id });
+  }
+
+  // Folders dropped into love_girls/ become playable heroines automatically.
+  await ensureGirlCharacters();
+
+  // Drop the old anime placeholder cast (himari / mio / hina) unless an
+  // existing playthrough still references them — keeps saves from breaking
+  // while making sure a fresh/legacy DB no longer shows the 2D characters.
+  await db.execute(sql`
+    DELETE FROM characters c
+    WHERE c.id IN ('himari', 'mio', 'hina')
+      AND NOT EXISTS (SELECT 1 FROM save_character_states s WHERE s.character_id = c.id)
+      AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.character_id = c.id)
+  `);
 
   const rows = await db.select().from(characters);
   return rows.sort((a, b) => a.sortOrder - b.sortOrder);
@@ -68,6 +85,8 @@ export type FullState = {
   liveAI: boolean;
   /** backgroundKey → image URL, with user overrides from the settings page. */
   backgrounds: Record<string, string>;
+  /** characterId → all real-photo sprites synced from love_girls/ */
+  galleries: Record<string, string[]>;
 };
 
 function mapHistory(rows: MessageRow[]): HistoryItem[] {
@@ -132,6 +151,7 @@ export async function getFullState(saveId: number): Promise<FullState | null> {
     characters: chars,
     liveAI: await isLiveAIEnabled(),
     backgrounds: await getEffectiveBackgrounds(),
+    galleries: await getSpritesByCharacterId(),
   };
 }
 

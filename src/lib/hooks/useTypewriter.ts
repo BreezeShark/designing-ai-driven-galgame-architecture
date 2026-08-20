@@ -1,39 +1,33 @@
 import { useEffect, useRef, useState } from "react";
 
 export function useTypewriter(text: string, speed = 26) {
-  const [display, setDisplay] = useState(text);
-  const [done, setDone] = useState(true);
-  const frame = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [progress, setProgress] = useState<{ text: string; shown: number }>({ text: "", shown: 0 });
+  const shownRef = useRef(0);
 
-  useEffect(() => {
-    if (frame.current) clearInterval(frame.current);
-    if (!text) {
-      setDisplay("");
-      setDone(true);
-      return;
-    }
-    setDisplay("");
-    setDone(false);
-    let i = 0;
-    frame.current = setInterval(() => {
-      i += 1;
-      setDisplay(text.slice(0, i));
-      if (i >= text.length) {
-        setDone(true);
-        if (frame.current) clearInterval(frame.current);
-      }
-    }, speed);
-    return () => {
-      if (frame.current) clearInterval(frame.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text]);
-
-  function skip() {
-    setDisplay(text);
-    setDone(true);
-    if (frame.current) clearInterval(frame.current);
+  // When a new text arrives, reset during render (React's endorsed "adjust
+  // state on prop change" pattern) instead of a synchronous setState in an
+  // effect — avoids cascading renders and lint errors.
+  if (progress.text !== text) {
+    setProgress({ text, shown: 0 });
   }
 
-  return { display, done, skip };
+  const done = !text || progress.shown >= text.length;
+
+  useEffect(() => {
+    shownRef.current = 0;
+    if (!text) return;
+    const timer = setInterval(() => {
+      shownRef.current = Math.min(shownRef.current + 1, text.length);
+      setProgress({ text, shown: shownRef.current });
+      if (shownRef.current >= text.length) clearInterval(timer);
+    }, speed);
+    return () => clearInterval(timer);
+  }, [text, speed]);
+
+  function skip() {
+    shownRef.current = text.length;
+    setProgress({ text, shown: text.length });
+  }
+
+  return { display: text.slice(0, progress.shown), done, skip };
 }

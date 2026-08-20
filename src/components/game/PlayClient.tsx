@@ -16,12 +16,21 @@ export function PlayClient(props: { initialState: FullState }) {
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const { save, characterStates, messages, characters, liveAI } = state;
+  const { save, characterStates, messages, characters, liveAI, galleries } = state;
 
   const activeState = useMemo(
     () => characterStates.find((c) => c.characterId === save.activeCharacterId) ?? null,
     [characterStates, save.activeCharacterId],
   );
+
+  // Real-photo sprite gallery: every image the player dropped into
+  // love_girls/<name>/, rotating as the conversation progresses.
+  const spritesOf = (characterId: string, fallbackUrl: string): string[] => {
+    const list = galleries?.[characterId];
+    return list && list.length > 0 ? list : [fallbackUrl].filter(Boolean);
+  };
+  const [photoOffsets, setPhotoOffsets] = useState<Record<string, number>>({});
+
   const presentStates = useMemo(
     () => characterStates.filter((c) => (save.presentCharacterIds as string[]).includes(c.characterId)),
     [characterStates, save.presentCharacterIds],
@@ -73,6 +82,16 @@ export function PlayClient(props: { initialState: FullState }) {
   }
 
   const activeCharacter = save.activeCharacterId ? characters.find((c) => c.id === save.activeCharacterId) : null;
+  const activeSprites = activeCharacter ? spritesOf(activeCharacter.id, activeCharacter.avatarUrl) : [];
+  const activePhotoCount = activeCharacter
+    ? messages.filter((m) => m.role === "character" && m.characterId === activeCharacter.id).length
+    : 0;
+  const activeSpriteIndex =
+    activeSprites.length > 0
+      ? (activePhotoCount + (photoOffsets[activeCharacter?.id ?? ""] ?? 0)) % activeSprites.length
+      : 0;
+  const activeSprite = activeSprites[activeSpriteIndex] ?? "";
+
 
   return (
     <main className="relative h-screen w-full overflow-hidden select-none">
@@ -112,7 +131,11 @@ export function PlayClient(props: { initialState: FullState }) {
               style={{ boxShadow: cs.characterId === save.activeCharacterId ? `0 0 0 2px ${cs.character.accentColor}55` : undefined }}
             >
               <span className="h-6 w-6 overflow-hidden rounded-full border border-white/30">
-                <img src={cs.character.avatarUrl} alt="" className="h-full w-full object-cover object-top" />
+                <img
+                  src={galleries?.[cs.characterId]?.[0] || cs.character.avatarUrl}
+                  alt=""
+                  className="h-full w-full object-cover object-top"
+                />
               </span>
               <span className="hidden text-xs text-white sm:inline">{cs.character.name}</span>
               <span className="flex items-center gap-0.5 text-[10px] text-pink-200">

@@ -3,7 +3,20 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | null; liveAI: boolean; titleBgUrl?: string }) {
+export type TitleGirl = {
+  id: string;
+  name: string;
+  cover: string;
+  count: number;
+};
+
+export function TitleScreen(props: {
+  hasSaves: boolean;
+  latestSaveId: number | null;
+  liveAI: boolean;
+  titleBgUrl?: string;
+  girls?: TitleGirl[];
+}) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "naming">("idle");
   const [playerName, setPlayerName] = useState("你");

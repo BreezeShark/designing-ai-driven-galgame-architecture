@@ -15,3 +15,7 @@ out/
 # generated
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# 立绘副本：由 love_girls/ 自动同步生成（npm run sync:girls），不进 git
+public/characters/
+.pgdata/
