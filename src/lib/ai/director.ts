@@ -118,6 +118,6 @@ export async function getDirectorUpdate(params: {
 
   const messages: ChatMessage[] = [{ role: "system", content: system }];
 
-  const result = await completeJSON<Partial<DirectorUpdate>>(messages, { temperature: 0.8 });
+  const result = await completeJSON<Partial<DirectorUpdate>>(messages, { temperature: 0.8, scope: "director" });
   return sanitize(result, fallback);
 }

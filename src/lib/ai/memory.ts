@@ -25,7 +25,7 @@ export async function updateMemorySummary(params: {
     },
   ];
 
-  const result = await completeJSON<{ summary: string }>(messages, { temperature: 0.4 });
+  const result = await completeJSON<{ summary: string }>(messages, { temperature: 0.4, scope: "memory" });
   if (result && typeof result.summary === "string" && result.summary.trim()) {
     return result.summary.trim().slice(0, 400);
   }

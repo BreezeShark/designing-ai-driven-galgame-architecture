@@ -1,0 +1,13 @@
+# dependencies / build
+node_modules/
+.next/
+out/
+
+# env & secrets — 只提交 .env.example，真实密钥不进 git
+.env
+.env.local
+.env*.local
+
+# misc
+.DS_Store
+*.log
