@@ -26,7 +26,8 @@ export function PlayClient(props: { initialState: FullState }) {
     () => characterStates.filter((c) => (save.presentCharacterIds as string[]).includes(c.characterId)),
     [characterStates, save.presentCharacterIds],
   );
-  const backgroundUrl = BACKGROUND_IMAGES[save.backgroundKey] ?? BACKGROUND_IMAGES.default;
+  const bgMap = state.backgrounds ?? BACKGROUND_IMAGES;
+  const backgroundUrl = bgMap[save.backgroundKey] ?? bgMap.default ?? BACKGROUND_IMAGES.default;
   const lastMessage = messages[messages.length - 1];
   const { display: typedLast, done: typedDone, skip: skipTyping } = useTypewriter(
     lastMessage ? lastMessage.content : "",

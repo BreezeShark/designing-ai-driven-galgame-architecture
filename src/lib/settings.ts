@@ -21,7 +21,17 @@ export const AI_SETTING_KEYS: string[] = AI_SCOPES.flatMap((s) => [
   `ai.${s}.model`,
 ]);
 export const PROMPT_SETTING_KEYS = ["prompt.director", "prompt.memory"];
-export const ALL_SETTING_KEYS = [...AI_SETTING_KEYS, ...PROMPT_SETTING_KEYS];
+
+// UI art overrides: values are asset URLs (e.g. /api/assets/3) set from the
+// settings page. Missing keys fall back to the bundled images.
+export const ASSET_SETTING_KEYS = [
+  "asset.titleBg",
+  "asset.bg.classroom",
+  "asset.bg.rooftop",
+  "asset.bg.park",
+  "asset.bg.library",
+];
+export const ALL_SETTING_KEYS = [...AI_SETTING_KEYS, ...PROMPT_SETTING_KEYS, ...ASSET_SETTING_KEYS];
 
 export async function getSettings(keys?: string[]): Promise<SettingsMap> {
   const rows = keys
@@ -49,4 +59,30 @@ export async function setSetting(key: string, value: string): Promise<void> {
     .insert(appSettings)
     .values({ key, value, updatedAt: new Date() })
     .onConflictDoUpdate({ target: appSettings.key, set: { value, updatedAt: new Date() } });
+}
+
+// ---------------------------------------------------------------------------
+// Effective UI art (bundled defaults + user overrides from the settings page)
+// ---------------------------------------------------------------------------
+
+import { BACKGROUND_IMAGES } from "@/lib/data/characters";
+
+export const DEFAULT_TITLE_BG = "/images/title-bg.jpg";
+
+/** Background-key → image URL map with user overrides applied. */
+export async function getEffectiveBackgrounds(): Promise<Record<string, string>> {
+  const stored = await getSettings(ASSET_SETTING_KEYS);
+  const map: Record<string, string> = { ...BACKGROUND_IMAGES };
+  for (const key of Object.keys(BACKGROUND_IMAGES)) {
+    if (key === "default") continue;
+    const override = stored[`asset.bg.${key}`];
+    if (override) map[key] = override;
+  }
+  map.default = map.classroom ?? map.default;
+  return map;
+}
+
+export async function getEffectiveTitleBg(): Promise<string> {
+  const stored = await getSettings(["asset.titleBg"]);
+  return stored["asset.titleBg"] || DEFAULT_TITLE_BG;
 }

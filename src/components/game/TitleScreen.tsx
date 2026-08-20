@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | null; liveAI: boolean }) {
+export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | null; liveAI: boolean; titleBgUrl?: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "naming">("idle");
   const [playerName, setPlayerName] = useState("你");
@@ -34,7 +34,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
   return (
     <main className="relative min-h-screen w-full overflow-hidden">
       <img
-        src="/images/title-bg.jpg"
+        src={props.titleBgUrl || "/images/title-bg.jpg"}
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
       />

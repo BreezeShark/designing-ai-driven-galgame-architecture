@@ -1,5 +1,6 @@
 import { listSaves } from "@/lib/game/service";
 import { isLiveAIEnabled } from "@/lib/ai/client";
+import { getEffectiveTitleBg } from "@/lib/settings";
 import { TitleScreen } from "@/components/game/TitleScreen";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function HomePage() {
       hasSaves={saves.length > 0}
       latestSaveId={saves[0]?.id ?? null}
       liveAI={await isLiveAIEnabled()}
+      titleBgUrl={await getEffectiveTitleBg()}
     />
   );
 }

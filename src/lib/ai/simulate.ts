@@ -183,6 +183,20 @@ const SCRIPT: SceneScript[] = [
 const ENDING_NARRATION =
   "文化祭的烟花在夜空中炸开，你身边的她转过头看着你，脸上带着这段时间以来最放松的笑容——这段故事，暂时告一段落。";
 
+// The hand-authored script above only knows the built-in trio. This helper
+// adapts a scene's cast to whatever heroines actually exist right now:
+// deleted heroines are dropped, and custom heroines added on the settings
+// page are appended so they always show up and can be talked to offline.
+const SCRIPTED_IDS = new Set(["himari", "mio", "hina"]);
+
+function adaptCast(sceneIds: string[], names: Record<string, string>): string[] {
+  const present = sceneIds.filter((id) => names[id]);
+  const extras = Object.keys(names).filter((id) => !SCRIPTED_IDS.has(id) && !present.includes(id));
+  const cast = [...present, ...extras];
+  // Every scene needs at least someone on stage.
+  return cast.length > 0 ? cast : Object.keys(names).slice(0, 1);
+}
+
 function buildTalkChoices(presentCharacterIds: string[], names: Record<string, string>): PendingChoice[] {
   const choices: PendingChoice[] = presentCharacterIds.map((id) => ({
     id: `talk_${id}`,
@@ -194,16 +208,17 @@ function buildTalkChoices(presentCharacterIds: string[], names: Record<string, s
 
 export function simulateDirectorStart(names: Record<string, string>): SimDirectorUpdate {
   const scene = SCRIPT[0];
+  const cast = adaptCast(scene.presentCharacterIds, names);
   return {
     narration: scene.narration,
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, names),
     phase: "narration",
     activeCharacterId: null,
-    storySummaryAppend: "故事开始：主角在校园中与陽葵相遇。",
+    storySummaryAppend: "故事开始：主角在校园中与大家相遇。",
     ended: false,
   };
 }
@@ -215,6 +230,7 @@ export function simulateDirectorChoice(params: {
   names: Record<string, string>;
 }): SimDirectorUpdate {
   const scene = SCRIPT[Math.min(params.chapter - 1, SCRIPT.length - 1)];
+  const cast = adaptCast(scene.presentCharacterIds, params.names);
   if (params.chosenChoiceId.startsWith("talk_")) {
     const targetId = params.chosenChoiceId.replace("talk_", "");
     return {
@@ -222,7 +238,7 @@ export function simulateDirectorChoice(params: {
       location: scene.location,
       backgroundKey: scene.backgroundKey,
       timeOfDay: scene.timeOfDay,
-      presentCharacterIds: scene.presentCharacterIds,
+      presentCharacterIds: cast,
       choices: null,
       phase: "dialogue",
       activeCharacterId: targetId,
@@ -236,8 +252,8 @@ export function simulateDirectorChoice(params: {
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, params.names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, params.names),
     phase: "narration",
     activeCharacterId: null,
     storySummaryAppend: "",
@@ -252,12 +268,13 @@ export function simulateDirectorAdvance(params: {
 }): SimDirectorUpdate {
   const nextChapter = params.chapter; // caller increments chapter before storing
   if (nextChapter >= SCRIPT.length) {
+    const cast = adaptCast(["himari", "hina", "mio"], params.names);
     return {
       narration: ENDING_NARRATION,
       location: "天台",
       backgroundKey: "rooftop",
       timeOfDay: "night",
-      presentCharacterIds: ["himari", "hina", "mio"],
+      presentCharacterIds: cast,
       choices: null,
       phase: "ended",
       activeCharacterId: null,
@@ -266,13 +283,14 @@ export function simulateDirectorAdvance(params: {
     };
   }
   const scene = SCRIPT[nextChapter];
+  const cast = adaptCast(scene.presentCharacterIds, params.names);
   return {
     narration: scene.narration,
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, params.names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, params.names),
     phase: "narration",
     activeCharacterId: null,
     storySummaryAppend: `剧情推进到「${scene.location}」。`,

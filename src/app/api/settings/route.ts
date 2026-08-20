@@ -5,13 +5,20 @@ import {
 } from "@/lib/settings";
 import { resolveAIConfig, type AIScope } from "@/lib/ai/client";
 import { DEFAULT_DIRECTOR_PROMPT, DEFAULT_MEMORY_PROMPT } from "@/lib/ai/prompts";
-import { CHARACTER_SEEDS } from "@/lib/data/characters";
+import { CHARACTER_SEEDS, BACKGROUND_IMAGES } from "@/lib/data/characters";
 import { ensureCharactersSeeded } from "@/lib/game/service";
 
 export const dynamic = "force-dynamic";
 
 const AI_SCOPES = ["global", "character", "director", "memory"] as const;
 const RUNTIME_SCOPES: AIScope[] = ["character", "director", "memory"];
+
+const BG_LABELS: Record<string, string> = {
+  classroom: "教室",
+  rooftop: "天台",
+  park: "公园",
+  library: "图书室",
+};
 
 function maskKey(key: string): string {
   if (key.length <= 8) return "•".repeat(key.length);
@@ -52,6 +59,17 @@ export async function GET() {
     prompts: {
       director: { value: stored["prompt.director"] ?? "", default: DEFAULT_DIRECTOR_PROMPT },
       memory: { value: stored["prompt.memory"] ?? "", default: DEFAULT_MEMORY_PROMPT },
+    },
+    assets: {
+      titleBg: { value: stored["asset.titleBg"] ?? "", default: "/images/title-bg.jpg", label: "标题画面" },
+      backgrounds: Object.fromEntries(
+        Object.keys(BACKGROUND_IMAGES)
+          .filter((k) => k !== "default")
+          .map((k) => [
+            k,
+            { value: stored[`asset.bg.${k}`] ?? "", default: BACKGROUND_IMAGES[k], label: BG_LABELS[k] ?? k },
+          ]),
+      ),
     },
     characters: chars.map((c) => ({
       id: c.id,
