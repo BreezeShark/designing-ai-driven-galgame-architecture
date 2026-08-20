@@ -117,7 +117,7 @@ export async function getFullState(saveId: number): Promise<FullState | null> {
     .limit(80);
   msgRows.reverse();
 
-  return { save, characterStates, messages: msgRows, characters: chars, liveAI: isLiveAIEnabled() };
+  return { save, characterStates, messages: msgRows, characters: chars, liveAI: await isLiveAIEnabled() };
 }
 
 async function applyDirectorUpdate(

@@ -10,7 +10,7 @@ export default async function HomePage() {
     <TitleScreen
       hasSaves={saves.length > 0}
       latestSaveId={saves[0]?.id ?? null}
-      liveAI={isLiveAIEnabled()}
+      liveAI={await isLiveAIEnabled()}
     />
   );
 }

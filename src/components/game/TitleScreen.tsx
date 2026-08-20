@@ -76,6 +76,12 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
               >
                 存档管理
               </button>
+              <button
+                onClick={() => router.push("/settings")}
+                className="w-full rounded-full border border-white/20 px-8 py-2.5 text-sm text-white/80 transition hover:bg-white/10"
+              >
+                设置（AI 接入 / 提示词）
+              </button>
             </>
           ) : (
             <div className="w-full rounded-2xl border border-white/20 bg-black/50 p-5 backdrop-blur">
@@ -109,7 +115,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
           )}
 
           <p className="mt-2 text-[11px] text-white/40">
-            {props.liveAI ? "● 已连接真实大模型（Live AI）" : "● 当前为本地离线模拟模式，配置 OPENAI_API_KEY 后自动切换为真实大模型"}
+            {props.liveAI ? "● 已连接真实大模型（Live AI）" : "● 当前为本地离线模拟模式，可在「设置」页配置 API Key 切换为真实大模型"}
           </p>
         </div>
       </div>

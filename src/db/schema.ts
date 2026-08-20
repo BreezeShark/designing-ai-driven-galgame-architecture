@@ -110,3 +110,19 @@ export const messages = pgTable(
 
 export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// App settings: simple key/value store backing the visual settings page.
+// Holds AI endpoint overrides (per-scope base URL / API key / model) and
+// prompt overrides (director & memory system prompts). Anything stored here
+// takes precedence over environment variables; missing keys fall back to
+// env vars and then to built-in defaults.
+// ---------------------------------------------------------------------------
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+
