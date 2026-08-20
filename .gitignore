@@ -11,3 +11,7 @@ out/
 # misc
 .DS_Store
 *.log
+
+# generated
+next-env.d.ts
+tsconfig.tsbuildinfo
