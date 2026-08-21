@@ -33,7 +33,7 @@
 //   4. env       OPENAI_<FIELD>         — classic single-key setup
 //   5. built-in default (no key → offline simulator for that scope)
 
-import { getSettings } from "@/lib/settings";
+import { getSettings, type SettingsMap } from "@/lib/settings";
 
 export type ChatRole = "system" | "user" | "assistant";
 
@@ -89,7 +89,10 @@ function resolveField(field: Field, scope: AIScope | undefined, db: Record<strin
 }
 
 export async function resolveAIConfig(scope?: AIScope): Promise<ResolvedAIConfig> {
-  const db = await getSettings();
+  // If the database is unreachable, fall back to env-only resolution instead
+  // of throwing — callers with offline fallbacks (and the Terminal Talk debug
+  // tool) keep working, and environment-based keys still take effect.
+  const db = await getSettings().catch(() => ({} as SettingsMap));
   return {
     apiKey: resolveField("apiKey", scope, db),
     baseUrl: resolveField("baseUrl", scope, db)!,

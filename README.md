@@ -42,15 +42,35 @@ OpenAI 兼容的接入点后，AI 会接管所有对话与剧情，无需改动�
 ### 0. 环境要求
 
 - Node.js 18+
-- PostgreSQL（本地或云端均可）
+- Docker（推荐，脚本会自动拉取 postgres:16）或本机 / 云端 PostgreSQL
 
-### 1. 安装依赖
+### 1. 一键部署（推荐）
+
+不用手动装依赖、配数据库、建表，一条命令全部搞定：
+
+```bash
+npm run start:local          # 开发模式：装依赖 → 起数据库 → 建表 → 启动
+npm run start:local:prod     # 生产模式：构建 + 启动
+```
+
+也可以直接调用脚本并指定数据库来源：
+
+```bash
+bash scripts/start.sh dev --docker   # 数据库用 Docker（postgres:16）
+bash scripts/start.sh dev --local    # 数据库用本机 PostgreSQL
+```
+
+脚本会自动完成：Node 版本检查 → 数据库准备（已有可用的 `DATABASE_URL` 直接复用；
+否则优先 Docker postgres:16，没有 Docker 则退回本机 PostgreSQL）→ 生成 / 更新 `.env`
+→ 缺依赖时 `npm install` → `drizzle-kit push` 建表 → 启动服务器（http://localhost:3000）。
+
+### 2. 手动安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 配置数据库
+### 3. 手动配置数据库
 
 复制环境变量模板并填入你的数据库连接串：
 
@@ -67,7 +87,7 @@ cp .env.example .env
 > `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=app_db postgres`
 > 快速起一个。
 
-### 3. 启动开发服务器
+### 4. 启动开发服务器
 
 ```bash
 npm run dev
@@ -75,7 +95,7 @@ npm run dev
 
 浏览器打开 http://localhost:3000 即可开始游戏。
 
-### 4. （可选）接入真实 AI
+### 5. （可选）接入真实 AI
 
 **方式一：环境变量**（编辑 `.env`）
 
@@ -196,11 +216,55 @@ OPENAI_MODEL=gpt-4o-mini                    # 可选
 | 命令 | 说明 |
 | --- | --- |
 | `npm run dev` | 启动开发服务器 |
+| `npm run start:local` | 一键本地部署：自动装依赖 / 起数据库 / 建表 / 启动开发服务器 |
+| `npm run start:local:prod` | 一键本地部署：生产构建 + 启动 |
+| `npm run dev:talk` | 终端对话调试模式（Terminal Talk） |
 | `npm run build` | 生产构建 |
 | `npm start` | 启动生产服务器 |
 | `npm run lint` | ESLint 检查 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run cutout` | 对 `love_girls/` 中新照片离线抠图，输出到 `public/images/characters/` |
+
+---
+
+## 终端对话调试模式（Terminal Talk）
+
+不需要打开浏览器，在终端里体验**完整游戏循环**的调试工具。它完全复用游戏真实 AI 层：
+`getCharacterReply`（角色对话）、`getDirectorUpdate`（剧情导演：开场 / 剧情选项 /
+推进剧情 / 每轮对话后自动判断）、`updateMemorySummary`（长期记忆摘要）。AI 配置解析
+顺序与网页端完全一致（数据库设置页 → 环境变量 → 默认），未配置 key 的模块自动走
+本地模拟器，适合快速调试 persona 提示词、模型接入与剧情节奏。
+
+```bash
+npm run dev:talk                     # 交互模式（完整游戏循环）
+npm run dev:talk -- "你好"           # 一次性模式：发一句话看回复后退出
+npm run dev:talk -- --character 江心妍   # 指定对话角色（名字或 id），开场后直接与她对话
+npm run dev:talk -- --config         # 打印 AI 配置解析结果后退出
+npm run dev:talk -- --ai off         # 强制本地模拟器（不调用任何接口）
+npm run dev:talk -- --verbose        # 打印导演更新等调试细节
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| 输入数字 | 选择当前剧情选项 |
+| `/choice` | 重新显示剧情选项 |
+| `/advance` | 让剧情导演推进剧情 / 切换场景 |
+| `/switch [名字]` | 切换当前对话的女主 |
+| `/list` | 列出全部角色与好感度 / 心情 |
+| `/affection [名字] [0-100]` | 查看或（调试）设置好感度 |
+| `/mood [名字] [心情]` | 查看或（调试）设置心情 |
+| `/mem [名字|all]` | 查看长期记忆摘要 |
+| `/hist` | 查看最近 20 条历史对话 |
+| `/ai [on/off]` | 真实 AI 层 / 强制本地模拟器切换 |
+| `/config` | 打印 AI 配置解析结果 |
+| `/help` / `/quit` | 帮助 / 退出 |
+
+说明：
+
+- **完全复用真实 AI 层**：对话、导演、记忆三个模块与网页版共用同一套代码，
+  配置解析顺序一致（数据库设置页 → 环境变量 → 默认），未配置 key 的模块自动走本地模拟器。
+- **数据只在内存**：剧情、好感度、长期记忆都不写入数据库，退出即丢弃，适合快速试验。
+- **历史窗口**：最近 20 条对话作为上下文窗口；每 8 次互动调用一次记忆摘要，压缩长期记忆。
 
 ---
 
