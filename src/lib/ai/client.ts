@@ -8,6 +8,10 @@
 //   OPENAI_API_KEY=sk-...            (enables live AI)
 //   OPENAI_BASE_URL=https://...      (optional, defaults to OpenAI)
 //   OPENAI_MODEL=gpt-4o-mini         (optional, defaults to gpt-4o-mini)
+//   OPENAI_TIMEOUT_MS=25000          (optional; non-stream = total timeout,
+//                                     stream = idle timeout between chunks)
+//   OPENAI_STREAM=1                  (optional; SSE streaming via stream:true)
+//   OPENAI_MAX_TOKENS=2048           (optional; >0 adds max_tokens)
 //
 // Any OpenAI-compatible provider (OpenRouter, Azure OpenAI gateway, local
 // vLLM/Ollama proxy, etc.) can be used by pointing the base URL at it.
@@ -46,7 +50,7 @@ export type AIScope = "character" | "director" | "memory";
 
 export const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 export const DEFAULT_MODEL = "gpt-4o-mini";
-const REQUEST_TIMEOUT_MS = 25_000;
+export const DEFAULT_TIMEOUT_MS = 25_000;
 
 const SCOPES: AIScope[] = ["character", "director", "memory"];
 
@@ -117,6 +121,168 @@ export async function isLiveAIEnabled(): Promise<boolean> {
   }
 }
 
+function envTruthy(raw: string | undefined): boolean {
+  const v = (raw ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes" || v === "on";
+}
+
+function envPositiveInt(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** Effective request timeout: OPENAI_TIMEOUT_MS, or 25000ms. */
+export function getRequestTimeoutMs(): number {
+  return envPositiveInt(process.env.OPENAI_TIMEOUT_MS) ?? DEFAULT_TIMEOUT_MS;
+}
+
+/** True when OPENAI_STREAM is 1/true/yes/on. */
+export function isStreamEnabled(): boolean {
+  return envTruthy(process.env.OPENAI_STREAM);
+}
+
+function getMaxTokens(): number | undefined {
+  return envPositiveInt(process.env.OPENAI_MAX_TOKENS);
+}
+
+function isAbortError(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && "name" in err && (err as { name: string }).name === "AbortError");
+}
+
+/**
+ * Resettable timeout used as:
+ *   - non-stream: a single total deadline
+ *   - stream: idle timeout — every SSE chunk calls arm() to restart the clock
+ */
+function createArmableTimeout(ms: number, controller: AbortController) {
+  let handle: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => {
+    if (handle !== undefined) clearTimeout(handle);
+    handle = setTimeout(() => controller.abort(), ms);
+  };
+  const dispose = () => {
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      handle = undefined;
+    }
+  };
+  arm();
+  return { arm, dispose };
+}
+
+/**
+ * Loose JSON parse for real-model replies that wrap the object in markdown
+ * fences or a `<think>…</think>` preamble. Returns null (and logs a 300-char
+ * preview) when nothing parseable remains.
+ */
+export function parseJSONLoose<T>(raw: string): T | null {
+  let s = raw.trim();
+  s = s.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, "").trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+
+  const tryParse = (input: string): T | null => {
+    try {
+      return JSON.parse(input) as T;
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(s);
+  if (direct !== null) return direct;
+
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end > start) {
+    const sliced = tryParse(s.slice(start, end + 1));
+    if (sliced !== null) return sliced;
+  }
+
+  console.error(`[ai] JSON 解析失败，原文前 300 字：${raw.slice(0, 300)}`);
+  return null;
+}
+
+function extractDeltaContent(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const choices = (payload as { choices?: unknown }).choices;
+  if (!Array.isArray(choices) || choices.length === 0) return null;
+  const delta = (choices[0] as { delta?: { content?: unknown } } | undefined)?.delta;
+  // Intentionally ignore reasoning_content — thinking traces must not leak into dialogue.
+  const content = delta?.content;
+  return typeof content === "string" && content.length > 0 ? content : null;
+}
+
+/**
+ * Read an OpenAI-compatible SSE body, concatenating choices[0].delta.content
+ * only. Handles lines split across chunks, `data: [DONE]`, and unparseable
+ * keep-alive packets (skipped, never thrown).
+ */
+async function readSSEContent(
+  body: ReadableStream<Uint8Array>,
+  options: {
+    arm: () => void;
+    onProgress?: (accumulated: string) => void;
+  },
+): Promise<string> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let lineBuf = "";
+  let accumulated = "";
+
+  const consumeLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith(":")) return;
+    if (!trimmed.startsWith("data:")) return;
+    const payload = trimmed.slice("data:".length).trim();
+    if (!payload || payload === "[DONE]") return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      // keep-alive / partial junk — skip, don't throw
+      return;
+    }
+    const piece = extractDeltaContent(parsed);
+    if (piece === null) return;
+    accumulated += piece;
+    options.onProgress?.(accumulated);
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      options.arm();
+      lineBuf += decoder.decode(value, { stream: true });
+      let nl = lineBuf.indexOf("\n");
+      while (nl !== -1) {
+        const line = lineBuf.slice(0, nl).replace(/\r$/, "");
+        lineBuf = lineBuf.slice(nl + 1);
+        consumeLine(line);
+        nl = lineBuf.indexOf("\n");
+      }
+    }
+    lineBuf += decoder.decode();
+    if (lineBuf.trim()) consumeLine(lineBuf.replace(/\r$/, ""));
+    return accumulated;
+  } finally {
+    try {
+      reader.releaseLock();
+    } catch {
+      // already released
+    }
+  }
+}
+
+export type CompleteJSONOptions = {
+  temperature?: number;
+  scope?: AIScope;
+  /** Streaming only: called with the accumulated raw text after every content chunk. */
+  onProgress?: (accumulated: string) => void;
+};
+
 /**
  * Calls the chat completion endpoint and expects a JSON object back.
  * Returns `null` if no API key is configured for this scope, the request
@@ -125,7 +291,7 @@ export async function isLiveAIEnabled(): Promise<boolean> {
  */
 export async function completeJSON<T>(
   messages: ChatMessage[],
-  options?: { temperature?: number; scope?: AIScope },
+  options?: CompleteJSONOptions,
 ): Promise<T | null> {
   const scope = options?.scope;
   let config: ResolvedAIConfig;
@@ -137,8 +303,22 @@ export async function completeJSON<T>(
   }
   if (!config.apiKey) return null;
 
+  const timeoutMs = getRequestTimeoutMs();
+  const stream = isStreamEnabled();
+  const maxTokens = getMaxTokens();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timer = createArmableTimeout(timeoutMs, controller);
+  const startedAt = Date.now();
+  const tag = `[ai:${scope ?? "default"}]`;
+
+  const body: Record<string, unknown> = {
+    model: config.model.value,
+    messages,
+    temperature: options?.temperature ?? 0.9,
+    response_format: { type: "json_object" },
+  };
+  if (stream) body.stream = true;
+  if (maxTokens !== undefined) body.max_tokens = maxTokens;
 
   try {
     const res = await fetch(`${config.baseUrl.value.replace(/\/$/, "")}/chat/completions`, {
@@ -147,29 +327,48 @@ export async function completeJSON<T>(
         "Content-Type": "application/json",
         Authorization: `Bearer ${config.apiKey.value}`,
       },
-      body: JSON.stringify({
-        model: config.model.value,
-        messages,
-        temperature: options?.temperature ?? 0.9,
-        response_format: { type: "json_object" },
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
     if (!res.ok) {
-      console.error(`[ai:${scope ?? "default"}] chat completion failed`, res.status, await res.text());
+      console.error(`${tag} chat completion failed`, res.status, await res.text());
       return null;
     }
 
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content) return null;
+    let content: string | undefined;
+    if (stream) {
+      if (!res.body) {
+        console.error(`${tag} stream response has no body`);
+        return null;
+      }
+      content = await readSSEContent(res.body, {
+        arm: timer.arm,
+        onProgress: options?.onProgress,
+      });
+    } else {
+      const data = await res.json();
+      const raw: unknown = data?.choices?.[0]?.message?.content;
+      content = typeof raw === "string" ? raw : undefined;
+    }
 
-    return JSON.parse(content) as T;
+    if (!content) return null;
+    return parseJSONLoose<T>(content);
   } catch (err) {
-    console.error(`[ai:${scope ?? "default"}] chat completion error`, err);
+    if (isAbortError(err)) {
+      const elapsedMs = Date.now() - startedAt;
+      const elapsedSec = (elapsedMs / 1000).toFixed(1);
+      const kind = stream ? "流式空闲超时" : "非流式总超时";
+      console.error(
+        `${tag} 请求在 ${elapsedSec}s 后被超时中断（${kind}，OPENAI_TIMEOUT_MS=${timeoutMs}）。` +
+          `建议：调大 OPENAI_TIMEOUT_MS / 开 OPENAI_STREAM=1 / 给该模块换更快的模型。` +
+          `本轮已回落到本地模拟器。`,
+      );
+      return null;
+    }
+    console.error(`${tag} chat completion error`, err);
     return null;
   } finally {
-    clearTimeout(timeout);
+    timer.dispose();
   }
 }

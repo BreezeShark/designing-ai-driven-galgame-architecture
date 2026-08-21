@@ -23,6 +23,10 @@ export function PlayClient(props: { initialState: FullState }) {
   const [openChoicesKey, setOpenChoicesKey] = useState<string | null>(null);
   // 隐藏所有 UI，只看立绘与场景（galgame 常见的「看图」模式）。
   const [uiHidden, setUiHidden] = useState(false);
+  // In-flight streamed reply: "" = thinking placeholder, non-empty = partial text, null = not streaming.
+  const [pendingPlayer, setPendingPlayer] = useState<string | null>(null);
+  const [draftReply, setDraftReply] = useState<string | null>(null);
+  const streamedContentRef = useRef<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   const { save, characterStates, messages, characters, liveAI, sfwMode } = state;
@@ -53,13 +57,15 @@ export function PlayClient(props: { initialState: FullState }) {
   const bgMap = state.backgrounds ?? BACKGROUND_IMAGES;
   const backgroundUrl = bgMap[save.backgroundKey] ?? bgMap.default ?? BACKGROUND_IMAGES.default;
   const lastMessage = messages[messages.length - 1];
+  const skipTypewriter =
+    streamedContentRef.current !== null && lastMessage?.content === streamedContentRef.current;
   const { display: typedLast, done: typedDone, skip: skipTyping } = useTypewriter(
     lastMessage ? lastMessage.content : "",
   );
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length]);
+  }, [messages.length, draftReply, pendingPlayer]);
 
   const callApi = useCallback(
     async function callApi(path: string, body?: Record<string, unknown>) {
@@ -94,11 +100,95 @@ export function PlayClient(props: { initialState: FullState }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  function handleSend() {
+  async function handleSend() {
     const content = input.trim();
     if (!content || busy) return;
     setInput("");
-    callApi("/message", { content });
+    setBusy(true);
+    setError("");
+    streamedContentRef.current = null;
+    setPendingPlayer(content);
+    // Don't flash 「正在思考…」 for the local simulator (returns in tens of ms).
+    // Only show the in-flight bubble if we're still waiting after a short beat.
+    let thinkTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+      setDraftReply((prev) => (prev === null ? "" : prev));
+    }, 300);
+
+    const clearInFlight = () => {
+      if (thinkTimer !== undefined) {
+        clearTimeout(thinkTimer);
+        thinkTimer = undefined;
+      }
+      setPendingPlayer(null);
+      setDraftReply(null);
+    };
+
+    try {
+      const res = await fetch(`/api/saves/${save.id}/message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, stream: true }),
+      });
+
+      const contentType = res.headers.get("content-type") ?? "";
+      if (contentType.includes("application/json") && !contentType.includes("ndjson")) {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "操作失败");
+        setState(data.state);
+        return;
+      }
+
+      if (!res.body) throw new Error("操作失败");
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let sawDelta = false;
+      let gotState = false;
+
+      const handleEvent = (event: { type?: string; text?: string; state?: FullState; error?: string }) => {
+        if (event.type === "delta" && typeof event.text === "string") {
+          sawDelta = true;
+          if (thinkTimer !== undefined) {
+            clearTimeout(thinkTimer);
+            thinkTimer = undefined;
+          }
+          setDraftReply((prev) => (prev ?? "") + event.text);
+        } else if (event.type === "state" && event.state) {
+          const last = event.state.messages[event.state.messages.length - 1];
+          if (sawDelta && last?.role === "character") {
+            streamedContentRef.current = last.content;
+          }
+          // Same tick as setState so pendingPlayer never duplicates the official bubble.
+          clearInFlight();
+          setState(event.state);
+          gotState = true;
+        } else if (event.type === "error") {
+          throw new Error(event.error || "操作失败");
+        }
+      };
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl = buf.indexOf("\n");
+        while (nl !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line) handleEvent(JSON.parse(line) as { type?: string; text?: string; state?: FullState; error?: string });
+          nl = buf.indexOf("\n");
+        }
+      }
+      const rest = buf.trim();
+      if (rest) handleEvent(JSON.parse(rest) as { type?: string; text?: string; state?: FullState; error?: string });
+      if (!gotState && !res.ok) throw new Error("操作失败");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "操作失败");
+    } finally {
+      clearInFlight();
+      setBusy(false);
+    }
   }
 
   function nameFor(characterId: string | null): string {
@@ -250,7 +340,7 @@ export function PlayClient(props: { initialState: FullState }) {
 
             <div
               ref={scrollRef}
-              onClick={() => !typedDone && skipTyping()}
+              onClick={() => !skipTypewriter && !typedDone && skipTyping()}
               className="max-h-[26vh] min-h-[96px] cursor-pointer overflow-y-auto rounded-2xl border border-white/15 bg-black/55 p-4 backdrop-blur-md"
             >
               {messages
@@ -258,7 +348,7 @@ export function PlayClient(props: { initialState: FullState }) {
                 .sort((a, b) => a.id - b.id || (ROLE_ORDER[a.role] ?? 9) - (ROLE_ORDER[b.role] ?? 9))
                 .map((m, idx, arr) => {
                   const isLast = idx === arr.length - 1 && m.id === lastMessage?.id;
-                  const content = isLast ? typedLast : m.content;
+                  const content = isLast ? (skipTypewriter ? m.content : typedLast) : m.content;
                   if (m.role === "narrator") {
                     return (
                       <p key={m.id} className="mb-2 text-center text-[13px] italic leading-relaxed text-white/70">
@@ -293,6 +383,32 @@ export function PlayClient(props: { initialState: FullState }) {
                     </div>
                   );
                 })}
+              {pendingPlayer && (
+                <div className="mb-2 flex justify-end">
+                  <span className="max-w-[80%] rounded-2xl rounded-br-sm bg-pink-500/80 px-3 py-1.5 text-sm text-white">
+                    {pendingPlayer}
+                  </span>
+                </div>
+              )}
+              {draftReply !== null && (
+                <div className="mb-2">
+                  <span className="mb-0.5 block text-xs font-semibold" style={{ color: colorFor(save.activeCharacterId) }}>
+                    {nameFor(save.activeCharacterId)}
+                  </span>
+                  <span
+                    className="block max-w-[85%] rounded-2xl rounded-tl-sm border-l-2 bg-white/10 px-3 py-1.5 text-sm text-white"
+                    style={{ borderColor: colorFor(save.activeCharacterId) }}
+                  >
+                    {draftReply || "正在思考…"}
+                    {draftReply ? (
+                      <span
+                        className="ml-0.5 inline-block h-[1em] w-[2px] translate-y-[2px] bg-white/85 align-middle"
+                        style={{ animation: "caretblink 1s step-end infinite" }}
+                      />
+                    ) : null}
+                  </span>
+                </div>
+              )}
             </div>
 
             {save.ended ? (

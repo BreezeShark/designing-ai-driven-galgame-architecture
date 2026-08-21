@@ -106,6 +106,11 @@ npm run dev
 OPENAI_API_KEY=sk-...
 OPENAI_BASE_URL=https://api.openai.com/v1   # 可选，任意 OpenAI 兼容供应商
 OPENAI_MODEL=gpt-4o-mini                    # 可选
+
+# 慢模型（导演单次可能跑一两分钟）建议同时打开这两项，否则会 25s 超时并丢掉已经计费的结果
+OPENAI_TIMEOUT_MS=120000                    # 可选，默认 25000
+OPENAI_STREAM=1                             # 可选，SSE 流式；超时变为「空闲超时」
+# OPENAI_MAX_TOKENS=4096                    # 可选，>0 时写入请求体
 ```
 
 **方式二：设置页**（推荐，无需重启）
@@ -138,6 +143,26 @@ OPENAI_MODEL=gpt-4o-mini                    # 可选
 4. 环境变量 OPENAI_<FIELD>        ← 经典单 key 配置
 5. 内置默认（无 key → 该模块走离线模拟器）
 ```
+
+### 超时、流式输出与 max_tokens
+
+这三个开关对三个模块（角色 / 导演 / 记忆）同时生效，写在 `.env` 里：
+
+| 变量 | 默认 | 语义 |
+| --- | --- | --- |
+| `OPENAI_TIMEOUT_MS` | `25000` | 覆盖请求超时。非流式是**总超时**；流式是**空闲超时**（每收到一个 SSE chunk 就重新计时，模型一直在吐字就不会被掐断） |
+| `OPENAI_STREAM` | 关闭 | `1` / `true` / `yes` / `on` 时请求体加 `stream: true`，走 SSE。女主台词会边生成边出现在对话框；导演输出的是整段场景 JSON，只享受空闲超时，不逐字上屏 |
+| `OPENAI_MAX_TOKENS` | 不传 | 大于 0 时写入请求体的 `max_tokens` |
+
+`POST /api/saves/[id]/message` 在请求体带 `{"stream": true}` 时返回 NDJSON 流（`application/x-ndjson`），一行一个事件：
+
+```json
+{"type":"delta","text":"笨、"}
+{"type":"state","state":{…}}
+{"type":"error","error":"…"}
+```
+
+不带 `stream` 时仍返回 `{ state }`，老调用方不受影响。即使开了 HTTP 流，只要 `OPENAI_STREAM` 没开，也只会收到一个 `state` 事件（本地模拟器同样如此）。
 
 ### SFW 模式
 
@@ -304,7 +329,7 @@ npm run cutout -- --model small    # 小模型（更省内存）
 | `POST /api/saves` | 创建存档 |
 | `GET /api/saves` | 存档列表 |
 | `DELETE /api/saves/[id]` | 删除存档 |
-| `POST /api/saves/[id]/message` | 发送玩家消息（女主回复） |
+| `POST /api/saves/[id]/message` | 发送玩家消息（女主回复）。请求体带 `stream: true` 时返回 NDJSON：`delta` / `state` / `error` |
 | `POST /api/saves/[id]/choice` | 提交剧情选项 |
 | `POST /api/saves/[id]/advance` | 推进剧情 |
 | `POST /api/saves/[id]/switch` | 切换当前对话的女主 |
@@ -314,13 +339,7 @@ npm run cutout -- --model small    # 小模型（更省内存）
 | `PUT/DELETE /api/characters/[id]` | 编辑 / 删除角色 |
 | `POST /api/assets` | 上传素材（存数据库） |
 | `GET /api/assets/[id]` | 读取素材 |
-| `GET /api/health` | 健康检查 |
-
----
-
-## 常见问题
-
-**Q：不配置 API Key 能玩吗？**
+| `GET 能玩吗？**
 能。所有模块在没有密钥时会自动使用本地离线模拟器，游戏完整可玩。
 
 **Q：接入真实 AI 后表现如何？**
@@ -332,6 +351,13 @@ npm run cutout -- --model small    # 小模型（更省内存）
 
 **Q：想换/加女主角怎么最省事？**
 在设置页「角色管理」中直接新增，填名字 + persona，上传立绘即可。
+
+**Q：控制台出现「[ai:...] 请求在 25s 后被超时中断」怎么办？**
+这是请求超时。供应商可能已经算完并扣费，但客户端等不及把结果丢掉，游戏会静默回落到本地模拟器，看起来像「AI 没接上」。处理办法：
+
+1. 把 `OPENAI_TIMEOUT_MS` 调大（导演模块建议 120000～180000，慢推理模型单次可能跑好几分钟）。
+2. 打开 `OPENAI_STREAM=1`。超时变成「空闲超时」：只要模型一直在吐字就不会被掐；真正卡死（N 秒没有任何数据）才中断。女主台词还会边生成边出现在对话框里。
+3. 给该模块换更快的模型（尤其是导演，它输出整段场景 JSON，token 数远多于台词）。
 
 ---
 

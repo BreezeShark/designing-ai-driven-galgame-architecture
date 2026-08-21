@@ -24,6 +24,41 @@ function toChatHistory(history: HistoryItem[], characterId: string): ChatMessage
     });
 }
 
+/**
+ * Incrementally extract the `reply` string from a partial JSON buffer so the
+ * dialogue can render token-by-token before the object is complete. Hanging
+ * backslashes wait for the next chunk; an unescaped `"` ends the string so
+ * trailing fields like `,"affectionDelta":3` never leak onto the screen.
+ */
+export function extractPartialReply(buffer: string): string {
+  const key = buffer.match(/"reply"\s*:\s*"/);
+  if (!key || key.index === undefined) return "";
+  let i = key.index + key[0].length;
+  let out = "";
+  while (i < buffer.length) {
+    const ch = buffer[i];
+    if (ch === "\\") {
+      const next = buffer[i + 1];
+      if (next === undefined) break; // 转义符被切在两个 chunk 之间
+      if (next === "u") {
+        const hex = buffer.slice(i + 2, i + 6);
+        if (hex.length < 4) break;
+        out += String.fromCharCode(parseInt(hex, 16));
+        i += 6;
+        continue;
+      }
+      const map: Record<string, string> = { n: "\n", t: "\t", r: "\r", b: "\b", f: "\f" };
+      out += map[next] ?? next;
+      i += 2;
+      continue;
+    }
+    if (ch === '"') break; // 字符串结束
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
 export async function getCharacterReply(params: {
   character: Character;
   affection: number;
@@ -34,6 +69,7 @@ export async function getCharacterReply(params: {
   playerName: string;
   location: string;
   timeOfDay: string;
+  onDelta?: (delta: string) => void;
 }): Promise<CharacterReplyResult> {
   const { character } = params;
 
@@ -43,7 +79,7 @@ export async function getCharacterReply(params: {
     `你和玩家（名字：${params.playerName}）目前的好感度是 ${params.affection}/100，关系阶段：${affectionTierDescription(params.affection)}。`,
     `你当前的心情状态：${MOOD_LABELS[params.mood] ?? params.mood}。`,
     params.memorySummary ? `你还记得和玩家过去互动的要点：${params.memorySummary}` : "",
-    "请只输出严格的 JSON，字段为：" +
+    "请只输出严格的 JSON，字段顺序必须是 reply、affectionDelta、mood，字段为：" +
       '{"reply": "你说的一两句话，中文，不含旁白或动作描写", ' +
       '"affectionDelta": 一个 -8 到 8 之间的整数，代表这句话让好感度产生的变化, ' +
       '"mood": "从 happy/shy/angry/sad/calm/excited/annoyed/touched 中选一个最贴切的心情"}',
@@ -57,7 +93,21 @@ export async function getCharacterReply(params: {
     { role: "user", content: `玩家对你说：${params.playerMessage}` },
   ];
 
-  const result = await completeJSON<CharacterReplyResult>(messages, { temperature: 1, scope: "character" });
+  let emitted = 0;
+  const result = await completeJSON<CharacterReplyResult>(messages, {
+    temperature: 1,
+    scope: "character",
+    onProgress: params.onDelta
+      ? (accumulated) => {
+          const partial = extractPartialReply(accumulated);
+          if (partial.length > emitted) {
+            const chunk = partial.slice(emitted);
+            emitted = partial.length;
+            params.onDelta!(chunk);
+          }
+        }
+      : undefined,
+  });
 
   if (
     result &&
