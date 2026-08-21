@@ -1,0 +1,21 @@
+# dependencies / build
+node_modules/
+.next/
+out/
+
+# env & secrets — 只提交 .env.example，真实密钥不进 git
+.env
+.env.local
+.env*.local
+
+# misc
+.DS_Store
+*.log
+
+# generated
+next-env.d.ts
+tsconfig.tsbuildinfo
+
+# 抠图模型缓存（可用 scripts/fetch_model.py 重新获取）与本地虚拟环境
+.models/
+.venv-cutout/

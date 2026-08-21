@@ -40,7 +40,7 @@ function tierOf(affection: number): "low" | "mid" | "high" {
 type ReplyBank = Record<"low" | "mid" | "high", { positive: string[]; neutral: string[]; negative: string[] }>;
 
 const REPLY_BANKS: Record<string, ReplyBank> = {
-  himari: {
+  linzhiyuan: {
     low: {
       positive: ["哼、算你还有点良心。", "别、别用那种语气跟我说话，很奇怪。", "我才没有很在意你说的话呢。"],
       neutral: ["……你今天怎么突然找我说话。", "有事就直说，我很忙的。", "班长的工作可不是给你聊天用的。"],
@@ -57,7 +57,7 @@ const REPLY_BANKS: Record<string, ReplyBank> = {
       negative: ["你要是不理我，我会很难过的，知道吗。", "别用那种口气，我会当真的哦。", "…就算这样，我也还是会担心你。"],
     },
   },
-  mio: {
+  jiangxinyan: {
     low: {
       positive: ["……谢谢。", "是吗，那就好。", "你，好像和其他人不太一样。"],
       neutral: ["……嗯。", "这本书，你也看过吗。", "图书室下午会比较安静，适合待着。"],
@@ -74,23 +74,6 @@ const REPLY_BANKS: Record<string, ReplyBank> = {
       negative: ["……对不起，我不是想让你担心。", "别露出那种表情，我没事的，真的。", "……谢谢你还愿意留在我身边。"],
     },
   },
-  hina: {
-    low: {
-      positive: ["嘿嘿，就知道你会这么说！", "诶嘿～被你这么一说我也开心啦！", "果然还是从小一起长大的最懂我！"],
-      neutral: ["喂喂，今天要不要一起回家啦！", "你猜我今天带了什么好吃的～", "又在发呆，跟我说说话嘛！"],
-      negative: ["诶——你怎么这样啦，好过分！", "哼，不理你了！", "…那我今天不去找你玩了，哼。"],
-    },
-    mid: {
-      positive: ["笨蛋，突然说这种话会让人心跳加速的啦！", "嘿嘿，能一直和你这样真好。", "只要是你说的话，我都愿意相信哦！"],
-      neutral: ["放学要不要一起去买那家新开的甜品店呀！", "今天陪我去个地方好不好，拜托啦～", "跟你在一起的时候时间过得好快。"],
-      negative: ["你干嘛突然这样嘛，人家会难过的。", "…哼，那我今天就自己一个人啦。", "别这样啦，我们和好嘛。"],
-    },
-    high: {
-      positive: ["…喜欢你这件事，我好像藏不住了。", "只要和你在一起，什么地方都像是节日。", "以后也要一直这样陪着我哦，说好了！"],
-      neutral: ["今天可以牵着手一起走吗，就一小段也好。", "…有时候会突然很想紧紧抱住你。", "从小到大，最喜欢的人一直都是你。"],
-      negative: ["…如果你不理我，我真的会很难过的。", "笨蛋，只有你能让我这么在意。", "…就算吵架，我也还是最喜欢你。"],
-    },
-  },
 };
 
 export function simulateCharacterReply(params: {
@@ -100,7 +83,7 @@ export function simulateCharacterReply(params: {
 }): SimCharacterReply {
   const delta = sentimentDelta(params.playerMessage);
   const tier = tierOf(params.affection);
-  const bank = REPLY_BANKS[params.characterId] ?? REPLY_BANKS.himari;
+  const bank = REPLY_BANKS[params.characterId] ?? REPLY_BANKS.linzhiyuan;
   const sentiment = delta > 1 ? "positive" : delta < 0 ? "negative" : "neutral";
   const reply = pick(bank[tier][sentiment]);
   const mood = delta > 2 ? "happy" : delta < -1 ? "annoyed" : tier === "high" ? "shy" : "calm";
@@ -140,48 +123,62 @@ const SCRIPT: SceneScript[] = [
     location: "教室",
     backgroundKey: "classroom",
     timeOfDay: "morning",
-    presentCharacterIds: ["himari"],
-    narration: "清晨的阳光洒进教室，朝雾陽葵正抱着一叠文件走进来，看到你便皱了皱眉，像是在思考要不要过来打招呼。",
+    presentCharacterIds: ["linzhiyuan"],
+    narration: "清晨的阳光洒进教室，林知鸢正抱着一叠文件走进来，看到你便皱了皱眉，像是在思考要不要过来打招呼。",
   },
   {
-    location: "天台",
-    backgroundKey: "rooftop",
+    location: "图书室",
+    backgroundKey: "library",
     timeOfDay: "noon",
-    presentCharacterIds: ["himari", "hina"],
-    narration: "午休时间，你被叫到了天台。风有点大，星野陽菜已经占好了位置，正朝你用力挥手。",
+    presentCharacterIds: ["linzhiyuan", "jiangxinyan"],
+    narration: "午休时间，你在图书室的角落撞见了抱着一摞书的江心妍，她抬头看了你一眼，又飞快地低下头去。林知鸢也在不远处整理着归还的书。",
   },
   {
     location: "图书室",
     backgroundKey: "library",
     timeOfDay: "afternoon",
-    presentCharacterIds: ["mio"],
-    narration: "放学后的图书室很安静，只有翻书声。雪代澪坐在靠窗的位置，注意到你进来时抬了下眼。",
+    presentCharacterIds: ["jiangxinyan"],
+    narration: "放学后的图书室很安静，只有翻书声。江心妍坐在靠窗的位置，注意到你进来时抬了下眼。",
   },
   {
     location: "公园",
     backgroundKey: "park",
     timeOfDay: "evening",
-    presentCharacterIds: ["hina", "mio"],
-    narration: "傍晚的公园很安静，长椅旁星野陽菜正踢着石子等你，雪代澪也难得地一起来了，安静地站在不远处。",
+    presentCharacterIds: ["linzhiyuan", "jiangxinyan"],
+    narration: "傍晚的公园很安静，长椅旁林知鸢正踢着石子等你，江心妍也难得地一起来了，安静地站在不远处。",
   },
   {
     location: "天台",
     backgroundKey: "rooftop",
     timeOfDay: "evening",
-    presentCharacterIds: ["himari", "hina", "mio"],
-    narration: "夕阳把天台染成橙红色，三个人似乎都在等你过来，气氛有种说不出的微妙。",
+    presentCharacterIds: ["linzhiyuan", "jiangxinyan"],
+    narration: "夕阳把天台染成橙红色，两个人似乎都在等你过来，气氛有种说不出的微妙。",
   },
   {
     location: "教室",
     backgroundKey: "classroom",
     timeOfDay: "night",
-    presentCharacterIds: ["himari", "hina", "mio"],
+    presentCharacterIds: ["linzhiyuan", "jiangxinyan"],
     narration: "文化祭前夜，教室里还亮着灯，大家都在为明天做最后的准备，你也被留下来帮忙。",
   },
 ];
 
 const ENDING_NARRATION =
   "文化祭的烟花在夜空中炸开，你身边的她转过头看着你，脸上带着这段时间以来最放松的笑容——这段故事，暂时告一段落。";
+
+// The hand-authored script above only knows the built-in trio. This helper
+// adapts a scene's cast to whatever heroines actually exist right now:
+// deleted heroines are dropped, and custom heroines added on the settings
+// page are appended so they always show up and can be talked to offline.
+const SCRIPTED_IDS = new Set(["linzhiyuan", "jiangxinyan"]);
+
+function adaptCast(sceneIds: string[], names: Record<string, string>): string[] {
+  const present = sceneIds.filter((id) => names[id]);
+  const extras = Object.keys(names).filter((id) => !SCRIPTED_IDS.has(id) && !present.includes(id));
+  const cast = [...present, ...extras];
+  // Every scene needs at least someone on stage.
+  return cast.length > 0 ? cast : Object.keys(names).slice(0, 1);
+}
 
 function buildTalkChoices(presentCharacterIds: string[], names: Record<string, string>): PendingChoice[] {
   const choices: PendingChoice[] = presentCharacterIds.map((id) => ({
@@ -194,16 +191,17 @@ function buildTalkChoices(presentCharacterIds: string[], names: Record<string, s
 
 export function simulateDirectorStart(names: Record<string, string>): SimDirectorUpdate {
   const scene = SCRIPT[0];
+  const cast = adaptCast(scene.presentCharacterIds, names);
   return {
     narration: scene.narration,
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, names),
     phase: "narration",
     activeCharacterId: null,
-    storySummaryAppend: "故事开始：主角在校园中与陽葵相遇。",
+    storySummaryAppend: "故事开始：主角在校园中与大家相遇。",
     ended: false,
   };
 }
@@ -215,6 +213,7 @@ export function simulateDirectorChoice(params: {
   names: Record<string, string>;
 }): SimDirectorUpdate {
   const scene = SCRIPT[Math.min(params.chapter - 1, SCRIPT.length - 1)];
+  const cast = adaptCast(scene.presentCharacterIds, params.names);
   if (params.chosenChoiceId.startsWith("talk_")) {
     const targetId = params.chosenChoiceId.replace("talk_", "");
     return {
@@ -222,7 +221,7 @@ export function simulateDirectorChoice(params: {
       location: scene.location,
       backgroundKey: scene.backgroundKey,
       timeOfDay: scene.timeOfDay,
-      presentCharacterIds: scene.presentCharacterIds,
+      presentCharacterIds: cast,
       choices: null,
       phase: "dialogue",
       activeCharacterId: targetId,
@@ -236,8 +235,8 @@ export function simulateDirectorChoice(params: {
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, params.names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, params.names),
     phase: "narration",
     activeCharacterId: null,
     storySummaryAppend: "",
@@ -252,12 +251,13 @@ export function simulateDirectorAdvance(params: {
 }): SimDirectorUpdate {
   const nextChapter = params.chapter; // caller increments chapter before storing
   if (nextChapter >= SCRIPT.length) {
+    const cast = adaptCast(["linzhiyuan", "jiangxinyan"], params.names);
     return {
       narration: ENDING_NARRATION,
       location: "天台",
       backgroundKey: "rooftop",
       timeOfDay: "night",
-      presentCharacterIds: ["himari", "hina", "mio"],
+      presentCharacterIds: cast,
       choices: null,
       phase: "ended",
       activeCharacterId: null,
@@ -266,13 +266,14 @@ export function simulateDirectorAdvance(params: {
     };
   }
   const scene = SCRIPT[nextChapter];
+  const cast = adaptCast(scene.presentCharacterIds, params.names);
   return {
     narration: scene.narration,
     location: scene.location,
     backgroundKey: scene.backgroundKey,
     timeOfDay: scene.timeOfDay,
-    presentCharacterIds: scene.presentCharacterIds,
-    choices: buildTalkChoices(scene.presentCharacterIds, params.names),
+    presentCharacterIds: cast,
+    choices: buildTalkChoices(cast, params.names),
     phase: "narration",
     activeCharacterId: null,
     storySummaryAppend: `剧情推进到「${scene.location}」。`,

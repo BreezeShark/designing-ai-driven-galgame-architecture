@@ -6,7 +6,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cutout": "bash scripts/cutout.sh"
   },
   "dependencies": {
     "dotenv": "17.3.1",

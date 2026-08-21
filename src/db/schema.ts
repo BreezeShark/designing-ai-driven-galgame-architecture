@@ -8,14 +8,21 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Characters: static definitions of the AI-driven heroines.
 // Each character has its own "persona" system prompt used by the character AI.
 // ---------------------------------------------------------------------------
 export const characters = pgTable("characters", {
-  id: text("id").primaryKey(), // slug, e.g. "himari"
+  id: text("id").primaryKey(), // slug, e.g. "linzhiyuan"
   name: text("name").notNull(),
   subtitle: text("subtitle").notNull().default(""), // relationship / role tag
   avatarUrl: text("avatar_url").notNull().default(""),
@@ -110,3 +117,34 @@ export const messages = pgTable(
 
 export type MessageRow = typeof messages.$inferSelect;
 export type NewMessageRow = typeof messages.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// App settings: simple key/value store backing the visual settings page.
+// Holds AI endpoint overrides (per-scope base URL / API key / model) and
+// prompt overrides (director & memory system prompts). Anything stored here
+// takes precedence over environment variables; missing keys fall back to
+// env vars and then to built-in defaults.
+// ---------------------------------------------------------------------------
+export const appSettings = pgTable("app_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type AppSetting = typeof appSettings.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Assets: user-uploaded images (character sprites, scene backgrounds, title
+// art) stored directly in Postgres so custom art survives redeploys and
+// needs no writable filesystem. Served via GET /api/assets/[id].
+// ---------------------------------------------------------------------------
+export const assets = pgTable("assets", {
+  id: serial("id").primaryKey(),
+  filename: text("filename").notNull().default(""),
+  mimeType: text("mime_type").notNull(),
+  data: bytea("data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Asset = typeof assets.$inferSelect;
+

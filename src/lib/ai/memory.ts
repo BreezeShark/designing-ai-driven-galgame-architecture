@@ -1,5 +1,7 @@
 import { completeJSON, type ChatMessage } from "./client";
 import { simulateMemorySummary } from "./simulate";
+import { DEFAULT_MEMORY_PROMPT } from "./prompts";
+import { getSetting } from "@/lib/settings";
 
 /**
  * Compresses recent raw dialogue into a running long-term memory summary for
@@ -12,12 +14,15 @@ export async function updateMemorySummary(params: {
   existingSummary: string;
   recentText: string;
 }): Promise<string> {
+  const template = (await getSetting("prompt.memory").catch(() => undefined)) || DEFAULT_MEMORY_PROMPT;
+  const memoryPrompt = template.replaceAll("{characterName}", params.characterName);
+
   const messages: ChatMessage[] = [
     {
       role: "system",
       content:
-        `你负责为galgame角色「${params.characterName}」维护一份简短的长期记忆摘要，帮助她记住和玩家之间发生过的重要事情、承诺、情绪变化。` +
-        "请把已有摘要和最近的对话合并、去重、浓缩成不超过120字的中文摘要。只输出严格JSON：{\"summary\": \"...\"}",
+        memoryPrompt +
+        "\n只输出严格JSON：{\"summary\": \"...\"}",
     },
     {
       role: "user",
@@ -25,7 +30,7 @@ export async function updateMemorySummary(params: {
     },
   ];
 
-  const result = await completeJSON<{ summary: string }>(messages, { temperature: 0.4 });
+  const result = await completeJSON<{ summary: string }>(messages, { temperature: 0.4, scope: "memory" });
   if (result && typeof result.summary === "string" && result.summary.trim()) {
     return result.summary.trim().slice(0, 400);
   }

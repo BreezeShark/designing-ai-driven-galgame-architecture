@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 320">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9ca3af" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6b7280" stop-opacity="0.35"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#g)">
+    <circle cx="100" cy="88" r="46"/>
+    <!-- modest, fully-covered standing figure -->
+    <path d="M100 138 C 54 138 32 184 28 246 L 28 320 L 172 320 L 172 246 C 168 184 146 138 100 138 Z"/>
+    <rect x="62" y="180" width="76" height="26" rx="13"/>
+    <path d="M100 214 L 100 300" stroke="url(#g)" stroke-width="14" stroke-linecap="round"/>
+  </g>
+  <text x="100" y="316" text-anchor="middle" font-size="15" fill="#ffffff" fill-opacity="0.6" font-family="sans-serif">SFW 模式</text>
+</svg>

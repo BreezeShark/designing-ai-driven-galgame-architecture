@@ -7,6 +7,8 @@ import {
 } from "./simulate";
 import type { DirectorUpdate, HistoryItem } from "./types";
 import { BACKGROUND_IMAGES } from "@/lib/data/characters";
+import { DEFAULT_DIRECTOR_PROMPT } from "./prompts";
+import { getSetting } from "@/lib/settings";
 
 const VALID_PHASES = ["narration", "dialogue", "ended"];
 const VALID_BACKGROUNDS = Object.keys(BACKGROUND_IMAGES).filter((k) => k !== "default");
@@ -86,8 +88,10 @@ export async function getDirectorUpdate(params: {
     });
   }
 
+  const directorPrompt = (await getSetting("prompt.director").catch(() => undefined)) || DEFAULT_DIRECTOR_PROMPT;
+
   const system = [
-    "你是一款galgame的「剧情导演AI」，负责推进故事、切换场景、决定在场角色，并可以在合适的时候给玩家提供选项。",
+    directorPrompt,
     "已登场角色及好感度：" +
       params.characterStates
         .map((s) => `${names[s.characterId] ?? s.characterId}(好感度${s.affection}/100，心情${s.mood})`)
@@ -118,6 +122,6 @@ export async function getDirectorUpdate(params: {
 
   const messages: ChatMessage[] = [{ role: "system", content: system }];
 
-  const result = await completeJSON<Partial<DirectorUpdate>>(messages, { temperature: 0.8 });
+  const result = await completeJSON<Partial<DirectorUpdate>>(messages, { temperature: 0.8, scope: "director" });
   return sanitize(result, fallback);
 }

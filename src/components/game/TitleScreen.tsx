@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | null; liveAI: boolean }) {
+export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | null; liveAI: boolean; titleBgUrl?: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<"idle" | "naming">("idle");
   const [playerName, setPlayerName] = useState("你");
@@ -34,7 +34,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
   return (
     <main className="relative min-h-screen w-full overflow-hidden">
       <img
-        src="/images/title-bg.jpg"
+        src={props.titleBgUrl || "/images/title-bg.jpg"}
         alt=""
         className="absolute inset-0 h-full w-full object-cover"
       />
@@ -47,7 +47,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
             月光笔记
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
-            三位由 AI 扮演的女主角，一位负责推进剧情与场景的 AI 导演。
+            两位由 AI 扮演的女主角，一位负责推进剧情与场景的 AI 导演。
             <br />
             你的每一句话都会被记住。
           </p>
@@ -75,6 +75,12 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
                 className="w-full rounded-full border border-white/20 px-8 py-2.5 text-sm text-white/80 transition hover:bg-white/10"
               >
                 存档管理
+              </button>
+              <button
+                onClick={() => router.push("/settings")}
+                className="w-full rounded-full border border-white/20 px-8 py-2.5 text-sm text-white/80 transition hover:bg-white/10"
+              >
+                设置（AI 接入 / 提示词）
               </button>
             </>
           ) : (
@@ -109,7 +115,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
           )}
 
           <p className="mt-2 text-[11px] text-white/40">
-            {props.liveAI ? "● 已连接真实大模型（Live AI）" : "● 当前为本地离线模拟模式，配置 OPENAI_API_KEY 后自动切换为真实大模型"}
+            {props.liveAI ? "● 已连接真实大模型（Live AI）" : "● 当前为本地离线模拟模式，可在「设置」页配置 API Key 切换为真实大模型"}
           </p>
         </div>
       </div>

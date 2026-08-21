@@ -57,7 +57,7 @@ export async function getCharacterReply(params: {
     { role: "user", content: `玩家对你说：${params.playerMessage}` },
   ];
 
-  const result = await completeJSON<CharacterReplyResult>(messages, { temperature: 1 });
+  const result = await completeJSON<CharacterReplyResult>(messages, { temperature: 1, scope: "character" });
 
   if (
     result &&

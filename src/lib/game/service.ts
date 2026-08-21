@@ -17,6 +17,7 @@ import { getDirectorUpdate } from "@/lib/ai/director";
 import { updateMemorySummary } from "@/lib/ai/memory";
 import type { DirectorUpdate, HistoryItem } from "@/lib/ai/types";
 import { isLiveAIEnabled } from "@/lib/ai/client";
+import { getEffectiveBackgrounds, getSfwMode } from "@/lib/settings";
 
 export class GameError extends Error {}
 
@@ -28,6 +29,11 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 export async function ensureCharactersSeeded(): Promise<Character[]> {
+  // Seed the built-in cast ONLY when the table is completely empty, so that
+  // heroines deleted (or fully replaced) via the settings page stay deleted.
+  const existing = await db.select().from(characters);
+  if (existing.length > 0) return existing.sort((a, b) => a.sortOrder - b.sortOrder);
+
   await db
     .insert(characters)
     .values(
@@ -60,6 +66,10 @@ export type FullState = {
   messages: MessageRow[];
   characters: Character[];
   liveAI: boolean;
+  /** backgroundKey → image URL, with user overrides from the settings page. */
+  backgrounds: Record<string, string>;
+  /** True when SFW mode is on: all 立绘 are replaced by the default placeholder. */
+  sfwMode: boolean;
 };
 
 function mapHistory(rows: MessageRow[]): HistoryItem[] {
@@ -117,7 +127,15 @@ export async function getFullState(saveId: number): Promise<FullState | null> {
     .limit(80);
   msgRows.reverse();
 
-  return { save, characterStates, messages: msgRows, characters: chars, liveAI: isLiveAIEnabled() };
+  return {
+    save,
+    characterStates,
+    messages: msgRows,
+    characters: chars,
+    liveAI: await isLiveAIEnabled(),
+    backgrounds: await getEffectiveBackgrounds(),
+    sfwMode: await getSfwMode(),
+  };
 }
 
 async function applyDirectorUpdate(
