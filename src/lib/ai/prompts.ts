@@ -13,4 +13,4 @@ export const DEFAULT_DIRECTOR_PROMPT =
 // {characterName} is replaced with the heroine's display name at call time.
 export const DEFAULT_MEMORY_PROMPT =
   "你负责为galgame角色「{characterName}」维护一份简短的长期记忆摘要，帮助她记住和玩家之间发生过的重要事情、承诺、情绪变化。" +
-  "请把已有摘要和最近的对话合并、去重、浓缩成不超过120字的中文摘要。";
+  "请把已有摘要和最近的对话合并、去重、浓缩成不超过200字的中文摘要。";

@@ -7,9 +7,9 @@ import { MOOD_LABELS } from "@/lib/data/characters";
 function affectionTierDescription(affection: number): string {
   if (affection < 20) return "陌生/警惕，还不太信任对方";
   if (affection < 40) return "普通熟人，保持礼貌距离";
-  if (affection < 60) return "朋友，比较自然放松";
-  if (affection < 80) return "心动，会紧张、会在意对方看法";
-  return "恋人般的亲密，愿意主动表达感情";
+  if (affection < 60) return "心动，会紧张、会在意对方看法";
+  if (affection < 80) return "恋人般的亲密，愿意主动表达感情";
+  return "被调教成性玩物，完全沉迷、服从、依赖对方，一条想要被调教的母狗";
 }
 
 function toChatHistory(history: HistoryItem[], characterId: string): ChatMessage[] {
@@ -45,7 +45,7 @@ export async function getCharacterReply(params: {
     params.memorySummary ? `你还记得和玩家过去互动的要点：${params.memorySummary}` : "",
     "请只输出严格的 JSON，字段为：" +
       '{"reply": "你说的一两句话，中文，不含旁白或动作描写", ' +
-      '"affectionDelta": 一个 -6 到 6 之间的整数，代表这句话让好感度产生的变化, ' +
+      '"affectionDelta": 一个 -8 到 8 之间的整数，代表这句话让好感度产生的变化, ' +
       '"mood": "从 happy/shy/angry/sad/calm/excited/annoyed/touched 中选一个最贴切的心情"}',
   ]
     .filter(Boolean)
