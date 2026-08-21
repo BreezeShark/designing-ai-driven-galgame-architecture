@@ -250,12 +250,35 @@ OPENAI_STREAM=1                             # 可选，SSE 流式；超时变为
 | `npm run dev` | 启动开发服务器 |
 | `npm run start:local` | 一键本地部署：自动装依赖 / 起数据库 / 建表 / 启动开发服务器 |
 | `npm run start:local:prod` | 一键本地部署：生产构建 + 启动 |
+| `npm run restart` | 重启开发服务器（改完 `.env` 后让配置生效，等价 `bash scripts/restart.sh`） |
+| `npm run restart:prod` | 重启生产服务器（等价 `bash scripts/restart.sh prod`） |
 | `npm run dev:talk` | 终端对话调试模式（Terminal Talk） |
 | `npm run build` | 生产构建 |
 | `npm start` | 启动生产服务器 |
 | `npm run lint` | ESLint 检查 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run cutout` | 对 `love_girls/` 中新照片离线抠图，输出到 `public/images/characters/` |
+
+---
+
+## 重启服务（让 `.env` 改动生效）
+
+`.env` 只在进程启动时读取一次。改完 `.env` 后，用下面的命令重启服务即可生效
+（脚本会先结束占用端口的旧进程，再启动新进程）：
+
+```bash
+npm run restart            # 重启开发服务器（默认后台运行，日志 .logs/server.log，PID .run/server.pid）
+npm run restart:prod       # 重启生产服务器（需先 npm run build）
+
+bash scripts/restart.sh status     # 查看运行状态
+bash scripts/restart.sh stop       # 只停止
+bash scripts/restart.sh --foreground   # 前台运行（日志打到当前终端）
+bash scripts/restart.sh --port 3001    # 指定端口
+```
+
+> 注意：`ai.*` 的密钥 / 接入点 / 模型若在**设置页**配置过，是存在数据库里的，
+> 优先级高于 `.env`，改 `.env` 不会覆盖它们，需到设置页修改。
+> `OPENAI_STREAM` / `OPENAI_TIMEOUT_MS` / `OPENAI_MAX_TOKENS` 只读环境变量，重启后一定生效。
 
 ---
 
@@ -273,6 +296,7 @@ npm run dev:talk -- "你好"           # 一次性模式：发一句话看回复
 npm run dev:talk -- --character 江心妍   # 指定对话角色（名字或 id），开场后直接与她对话
 npm run dev:talk -- --config         # 打印 AI 配置解析结果后退出
 npm run dev:talk -- --ai off         # 强制本地模拟器（不调用任何接口）
+npm run dev:talk -- --stream on      # 强制流式输出（默认 auto：跟随 OPENAI_STREAM）
 npm run dev:talk -- --verbose        # 打印导演更新等调试细节
 ```
 
@@ -288,6 +312,7 @@ npm run dev:talk -- --verbose        # 打印导演更新等调试细节
 | `/mem [名字|all]` | 查看长期记忆摘要 |
 | `/hist` | 查看最近 20 条历史对话 |
 | `/ai [on/off]` | 真实 AI 层 / 强制本地模拟器切换 |
+| `/stream [on/off]` | 流式输出开关（默认跟随 `OPENAI_STREAM`，下次对话生效） |
 | `/config` | 打印 AI 配置解析结果 |
 | `/help` / `/quit` | 帮助 / 退出 |
 
@@ -295,6 +320,8 @@ npm run dev:talk -- --verbose        # 打印导演更新等调试细节
 
 - **完全复用真实 AI 层**：对话、导演、记忆三个模块与网页版共用同一套代码，
   配置解析顺序一致（数据库设置页 → 环境变量 → 默认），未配置 key 的模块自动走本地模拟器。
+- **流式输出**：真实 AI 且开启 `OPENAI_STREAM`（或 `--stream on`、游戏内 `/stream on`）时，
+  女主台词会**逐字打印**到终端；否则整句输出。本地模拟器无流式。
 - **数据只在内存**：剧情、好感度、长期记忆都不写入数据库，退出即丢弃，适合快速试验。
 - **历史窗口**：最近 20 条对话作为上下文窗口；每 8 次互动调用一次记忆摘要，压缩长期记忆。
 
