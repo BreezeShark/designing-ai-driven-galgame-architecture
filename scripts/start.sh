@@ -148,7 +148,7 @@ ensure_docker_db() {
       docker start "$DOCKER_CONTAINER" >/dev/null
     fi
   else
-    step "用 Docker 拉取并启动 postgres:16（容器 $DOCKER_CONTAINER，端口 ${DB_PORT}）"
+    step "用 Docker 拉取并启动 postgres:16（容器 ${DOCKER_CONTAINER}，端口 ${DB_PORT}）"
     if ! docker run -d --name "$DOCKER_CONTAINER" \
       -e POSTGRES_USER="$DB_USER" -e POSTGRES_PASSWORD="$DB_PASSWORD" -e POSTGRES_DB="$DB_NAME" \
       -p "${DB_PORT}:5432" postgres:16 >/dev/null 2>&1; then
