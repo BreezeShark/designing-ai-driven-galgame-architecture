@@ -47,7 +47,7 @@ export function TitleScreen(props: { hasSaves: boolean; latestSaveId: number | n
             月光笔记
           </h1>
           <p className="mt-4 max-w-md text-sm leading-relaxed text-white/70">
-            三位由 AI 扮演的女主角，一位负责推进剧情与场景的 AI 导演。
+            两位由 AI 扮演的女主角，一位负责推进剧情与场景的 AI 导演。
             <br />
             你的每一句话都会被记住。
           </p>

@@ -15,3 +15,7 @@ out/
 # generated
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# 抠图模型缓存（可用 scripts/fetch_model.py 重新获取）与本地虚拟环境
+.models/
+.venv-cutout/

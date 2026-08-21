@@ -22,7 +22,7 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 // Each character has its own "persona" system prompt used by the character AI.
 // ---------------------------------------------------------------------------
 export const characters = pgTable("characters", {
-  id: text("id").primaryKey(), // slug, e.g. "himari"
+  id: text("id").primaryKey(), // slug, e.g. "linzhiyuan"
   name: text("name").notNull(),
   subtitle: text("subtitle").notNull().default(""), // relationship / role tag
   avatarUrl: text("avatar_url").notNull().default(""),
