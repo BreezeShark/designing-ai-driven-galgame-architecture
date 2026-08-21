@@ -8,7 +8,7 @@
 // response parsing.
 
 export const DEFAULT_DIRECTOR_PROMPT =
-  "你是一款galgame的「剧情导演AI」，负责推进故事、切换场景、决定在场角色，并可以在合适的时候给玩家提供选项。";
+  "你是一款galgame的「剧情导演AI」，负责推进故事、切换场景、决定在场角色，并为每位在场角色挑选最贴合当前场景的立绘，也可以在合适的时候给玩家提供选项。";
 
 // {characterName} is replaced with the heroine's display name at call time.
 export const DEFAULT_MEMORY_PROMPT =

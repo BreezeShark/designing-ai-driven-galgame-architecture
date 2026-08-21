@@ -12,6 +12,7 @@ import {
 } from "@/db/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { CHARACTER_SEEDS } from "@/lib/data/characters";
+import { scanBundledSprites } from "@/lib/data/sprite-scan";
 import { getCharacterReply } from "@/lib/ai/character";
 import { getDirectorUpdate } from "@/lib/ai/director";
 import { updateMemorySummary } from "@/lib/ai/memory";
@@ -32,7 +33,7 @@ export async function ensureCharactersSeeded(): Promise<Character[]> {
   // Seed the built-in cast ONLY when the table is completely empty, so that
   // heroines deleted (or fully replaced) via the settings page stay deleted.
   const existing = await db.select().from(characters);
-  if (existing.length > 0) return existing.sort((a, b) => a.sortOrder - b.sortOrder);
+  if (existing.length > 0) return backfillSprites(existing);
 
   await db
     .insert(characters)
@@ -42,6 +43,10 @@ export async function ensureCharactersSeeded(): Promise<Character[]> {
         name: c.name,
         subtitle: c.subtitle,
         avatarUrl: c.avatarUrl,
+        sprites: (() => {
+          const bundled = scanBundledSprites(c.name);
+          return bundled.length > 0 ? bundled : [{ url: c.avatarUrl, label: "默认立绘" }];
+        })(),
         accentColor: c.accentColor,
         persona: c.persona,
         speechStyle: c.speechStyle,
@@ -51,7 +56,31 @@ export async function ensureCharactersSeeded(): Promise<Character[]> {
     .onConflictDoNothing({ target: characters.id });
 
   const rows = await db.select().from(characters);
-  return rows.sort((a, b) => a.sortOrder - b.sortOrder);
+  return backfillSprites(rows);
+}
+
+/**
+ * Fill in the sprite library of heroines saved before multi-立绘 support (or
+ * whose folder gained new artwork), so the director always has something to
+ * choose from. Sprites explicitly edited on the settings page are kept as-is.
+ */
+async function backfillSprites(rows: Character[]): Promise<Character[]> {
+  const result: Character[] = [];
+  for (const row of rows) {
+    if ((row.sprites ?? []).length > 0) {
+      result.push(row);
+      continue;
+    }
+    const bundled = scanBundledSprites(row.name);
+    const sprites = bundled.length > 0 ? bundled : row.avatarUrl ? [{ url: row.avatarUrl, label: "默认立绘" }] : [];
+    if (sprites.length === 0) {
+      result.push(row);
+      continue;
+    }
+    await db.update(characters).set({ sprites }).where(eq(characters.id, row.id));
+    result.push({ ...row, sprites });
+  }
+  return result.sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 export async function listSaves(): Promise<Save[]> {
@@ -155,6 +184,7 @@ async function applyDirectorUpdate(
       backgroundKey: update.backgroundKey,
       timeOfDay: update.timeOfDay,
       presentCharacterIds: update.presentCharacterIds,
+      characterSprites: update.characterSprites,
       pendingChoices: update.choices,
       phase: update.phase,
       activeCharacterId: update.activeCharacterId,

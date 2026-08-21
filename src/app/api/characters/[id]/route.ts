@@ -1,6 +1,7 @@
 import { db } from "@/db";
-import { characters, saves } from "@/db/schema";
+import { characters, saves, type CharacterSprite } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { parseSprites } from "@/lib/data/sprites";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     name: string;
     avatarUrl: string;
     accentColor: string;
+    sprites: CharacterSprite[];
   }> = {};
 
   if (typeof body.persona === "string") {
@@ -37,12 +39,25 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (typeof body.speechStyle === "string") patch.speechStyle = body.speechStyle.trim().slice(0, 100);
   if (typeof body.subtitle === "string") patch.subtitle = body.subtitle.trim().slice(0, 100);
   if (typeof body.avatarUrl === "string") patch.avatarUrl = body.avatarUrl.trim().slice(0, 300);
+  if (body.sprites !== undefined) {
+    const sprites = parseSprites(body.sprites);
+    if (!sprites) return Response.json({ error: "立绘列表格式不正确" }, { status: 400 });
+    if (sprites.length === 0) return Response.json({ error: "至少要保留一张立绘" }, { status: 400 });
+    patch.sprites = sprites;
+  }
   if (typeof body.accentColor === "string" && HEX_COLOR.test(body.accentColor)) {
     patch.accentColor = body.accentColor;
   }
 
   if (Object.keys(patch).length === 0) {
     return Response.json({ error: "没有可更新的字段" }, { status: 400 });
+  }
+
+  // Keep the default portrait pointing at a sprite that still exists.
+  if (patch.sprites) {
+    const [current] = await db.select().from(characters).where(eq(characters.id, id));
+    const avatar = patch.avatarUrl ?? current?.avatarUrl ?? "";
+    if (!patch.sprites.some((s) => s.url === avatar)) patch.avatarUrl = patch.sprites[0].url;
   }
 
   const [updated] = await db.update(characters).set(patch).where(eq(characters.id, id)).returning();
