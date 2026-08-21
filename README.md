@@ -218,11 +218,41 @@ OPENAI_MODEL=gpt-4o-mini                    # 可选
 | `npm run dev` | 启动开发服务器 |
 | `npm run start:local` | 一键本地部署：自动装依赖 / 起数据库 / 建表 / 启动开发服务器 |
 | `npm run start:local:prod` | 一键本地部署：生产构建 + 启动 |
+| `npm run dev:talk` | 终端对话调试模式（Terminal Talk） |
 | `npm run build` | 生产构建 |
 | `npm start` | 启动生产服务器 |
 | `npm run lint` | ESLint 检查 |
 | `npm run typecheck` | TypeScript 类型检查 |
 | `npm run cutout` | 对 `love_girls/` 中新照片离线抠图，输出到 `public/images/characters/` |
+
+---
+
+## 终端对话调试模式（Terminal Talk）
+
+不需要打开浏览器，在终端里直接和 AI 女主对话的调试工具。它复用游戏真实 AI 层
+（`getCharacterReply` 等），AI 配置解析顺序与网页端完全一致（数据库设置页 →
+环境变量 → 默认），未配置 key 时自动走本地模拟器，适合快速调试 persona 提示词、
+模型接入与对话效果。
+
+```bash
+npm run dev:talk                     # 交互模式
+npm run dev:talk -- "你好"           # 一次性模式：发一句话看回复后退出
+npm run dev:talk -- --character 江心妍   # 指定对话角色（名字或 id）
+npm run dev:talk -- --config         # 打印 AI 配置解析结果后退出
+npm run dev:talk -- --ai off         # 强制本地模拟器（不调用任何接口）
+npm run dev:talk -- --verbose        # 打印调试细节
+```
+
+| 命令 | 说明 |
+| --- | --- |
+| `/list` | 列出全部角色与好感度 / 心情 |
+| `/switch [名字]` | 切换当前对话对象 |
+| `/hist` | 查看最近 20 条历史对话 |
+| `/ai [on/off]` | 真实 AI 层 / 强制本地模拟器切换 |
+| `/config` | 打印 AI 配置解析结果 |
+| `/help` / `/quit` | 帮助 / 退出 |
+
+说明：终端模式的数据（好感度、心情、对话历史）只在内存中，不写数据库，退出即丢弃。
 
 ---
 
