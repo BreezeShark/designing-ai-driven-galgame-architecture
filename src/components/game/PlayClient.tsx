@@ -108,7 +108,20 @@ export function PlayClient(props: { initialState: FullState }) {
     setError("");
     streamedContentRef.current = null;
     setPendingPlayer(content);
-    setDraftReply("");
+    // Don't flash 「正在思考…」 for the local simulator (returns in tens of ms).
+    // Only show the in-flight bubble if we're still waiting after a short beat.
+    let thinkTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+      setDraftReply((prev) => (prev === null ? "" : prev));
+    }, 300);
+
+    const clearInFlight = () => {
+      if (thinkTimer !== undefined) {
+        clearTimeout(thinkTimer);
+        thinkTimer = undefined;
+      }
+      setPendingPlayer(null);
+      setDraftReply(null);
+    };
 
     try {
       const res = await fetch(`/api/saves/${save.id}/message`, {
@@ -136,12 +149,18 @@ export function PlayClient(props: { initialState: FullState }) {
       const handleEvent = (event: { type?: string; text?: string; state?: FullState; error?: string }) => {
         if (event.type === "delta" && typeof event.text === "string") {
           sawDelta = true;
+          if (thinkTimer !== undefined) {
+            clearTimeout(thinkTimer);
+            thinkTimer = undefined;
+          }
           setDraftReply((prev) => (prev ?? "") + event.text);
         } else if (event.type === "state" && event.state) {
           const last = event.state.messages[event.state.messages.length - 1];
           if (sawDelta && last?.role === "character") {
             streamedContentRef.current = last.content;
           }
+          // Same tick as setState so pendingPlayer never duplicates the official bubble.
+          clearInFlight();
           setState(event.state);
           gotState = true;
         } else if (event.type === "error") {
@@ -167,8 +186,7 @@ export function PlayClient(props: { initialState: FullState }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
     } finally {
-      setPendingPlayer(null);
-      setDraftReply(null);
+      clearInFlight();
       setBusy(false);
     }
   }
