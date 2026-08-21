@@ -12,6 +12,10 @@ out/
 .DS_Store
 *.log
 
+# 服务运行期文件（scripts/restart.sh 生成）
+.run/
+.logs/
+
 # generated
 next-env.d.ts
 tsconfig.tsbuildinfo

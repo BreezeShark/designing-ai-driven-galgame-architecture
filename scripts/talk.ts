@@ -16,10 +16,11 @@
  *   npm run dev:talk -- --character 江心妍
  *   npm run dev:talk -- --config      # 打印 AI 配置解析结果后退出
  *   npm run dev:talk -- --ai off      # 强制本地模拟器
+ *   npm run dev:talk -- --stream on   # 强制流式输出（默认跟随 OPENAI_STREAM）
  *   npm run dev:talk -- --verbose     # 打印导演更新等调试细节
  *
  * 游戏内命令：/choice /advance /switch /list /affection /mood /mem /hist
- *             /ai /config /help /quit
+ *             /ai /stream /config /help /quit
  */
 import "dotenv/config";
 
@@ -31,7 +32,7 @@ import { CHARACTER_SEEDS, MOOD_LABELS, TIME_LABELS } from "@/lib/data/characters
 import { getCharacterReply } from "@/lib/ai/character";
 import { getDirectorUpdate } from "@/lib/ai/director";
 import { updateMemorySummary } from "@/lib/ai/memory";
-import { isLiveAIEnabled, resolveAIConfig, type AIScope } from "@/lib/ai/client";
+import { isLiveAIEnabled, isStreamEnabled, resolveAIConfig, type AIScope } from "@/lib/ai/client";
 import type { CharacterReplyResult, DirectorUpdate, HistoryItem } from "@/lib/ai/types";
 import {
   simulateCharacterReply,
@@ -160,6 +161,7 @@ async function characterReply(
   character: Character,
   state: SaveCharacterState,
   playerMessage: string,
+  onDelta?: (delta: string) => void,
 ): Promise<CharacterReplyResult> {
   if (!useLiveAI) {
     return simulateCharacterReply({
@@ -168,7 +170,9 @@ async function characterReply(
       playerMessage,
     });
   }
-  const result = await getCharacterReply({
+  // onDelta 只在真实 AI + OPENAI_STREAM 开启时被逐段回调（否则从不触发），
+  // 调用方据此在「流式逐字输出」与「整句打印」之间切换。
+  return getCharacterReply({
     character,
     affection: state.affection,
     mood: state.mood,
@@ -178,9 +182,8 @@ async function characterReply(
     playerName: st.save.playerName,
     location: st.save.location,
     timeOfDay: st.save.timeOfDay,
+    onDelta,
   });
-  if (st.verbose) out(dim(`[debug] characterReply -> ${JSON.stringify(result)}`));
-  return result;
 }
 
 async function directorUpdate(
@@ -318,7 +321,17 @@ async function handlePlayerMessage(
 
   pushHistory(st, { role: "player", characterId: null, content: trimmed });
 
-  const result = await characterReply(st, character, state, trimmed);
+  // 流式输出：真实 AI + OPENAI_STREAM=1 时，先打印「角色名：」前缀，再随
+  // delta 逐字写终端；未走流式（本地模拟器 / 未开流式）时 onDelta 不会被
+  // 调用，回复走下面的整句打印。
+  let streamed = false;
+  const result = await characterReply(st, character, state, trimmed, (delta) => {
+    if (!streamed) {
+      process.stdout.write(`${paint(C.bold, `${character.name}：`)} `);
+      streamed = true;
+    }
+    process.stdout.write(delta);
+  });
   state.affection = clamp(state.affection + result.affectionDelta, 0, 100);
   state.mood = result.mood;
   state.interactionCount += 1;
@@ -335,7 +348,11 @@ async function handlePlayerMessage(
   }
 
   pushHistory(st, { role: "character", characterId: character.id, content: result.reply });
-  out(`${paint(C.bold, `${character.name}：`)} ${result.reply}`);
+  if (streamed) {
+    out(""); // 结束流式行
+  } else {
+    out(`${paint(C.bold, `${character.name}：`)} ${result.reply}`);
+  }
   if (st.verbose) {
     out(
       dim(
@@ -565,6 +582,20 @@ async function cmdAi(st: TalkState, args: string[]): Promise<void> {
   }
 }
 
+function cmdStream(args: string[]): void {
+  if (args[0] === "on") {
+    process.env.OPENAI_STREAM = "1";
+    printSystem("已开启流式输出（OPENAI_STREAM=1，下次对话生效）");
+  } else if (args[0] === "off") {
+    delete process.env.OPENAI_STREAM;
+    printSystem("已关闭流式输出（下次对话生效）");
+  } else {
+    printSystem(
+      `当前流式：${isStreamEnabled() ? "开启" : "关闭"}（读取环境变量 OPENAI_STREAM）。用法：/stream [on|off]`,
+    );
+  }
+}
+
 function printHelp(): void {
   out(paint(C.bold, "Terminal Talk 命令："));
   out("  输入数字            选择当前剧情选项（/choice 重看选项）");
@@ -576,6 +607,7 @@ function printHelp(): void {
   out("  /mem [名字|all]     查看长期记忆摘要");
   out("  /hist               查看最近 20 条历史对话");
   out("  /ai [on|off]        真实 AI 层 / 强制本地模拟器切换");
+  out("  /stream [on|off]    流式输出开关（默认跟随 OPENAI_STREAM）");
   out("  /config             打印 AI 配置解析结果");
   out("  /help               显示本帮助");
   out("  /quit               退出");
@@ -589,11 +621,19 @@ type CliOptions = {
   characterId: string | null;
   showConfig: boolean;
   ai: "auto" | "on" | "off";
+  stream: "auto" | "on" | "off";
   verbose: boolean;
 };
 
 function parseArgs(argv: string[]): CliOptions {
-  const opts: CliOptions = { message: null, characterId: null, showConfig: false, ai: "auto", verbose: false };
+  const opts: CliOptions = {
+    message: null,
+    characterId: null,
+    showConfig: false,
+    ai: "auto",
+    stream: "auto",
+    verbose: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--config") opts.showConfig = true;
@@ -606,6 +646,12 @@ function parseArgs(argv: string[]): CliOptions {
     else if (a.startsWith("--ai=")) {
       const v = a.slice("--ai=".length);
       if (v === "on" || v === "off" || v === "auto") opts.ai = v;
+    } else if (a === "--stream") {
+      const v = argv[++i];
+      if (v === "on" || v === "off" || v === "auto") opts.stream = v;
+    } else if (a.startsWith("--stream=")) {
+      const v = a.slice("--stream=".length);
+      if (v === "on" || v === "off" || v === "auto") opts.stream = v;
     } else if (a === "--help" || a === "-h") {
       printUsage();
       process.exit(0);
@@ -625,6 +671,7 @@ function printUsage(): void {
   out("  npm run dev:talk -- --character 江心妍  指定对话角色（名字或 id）");
   out("  npm run dev:talk -- --config          打印 AI 配置解析结果后退出");
   out("  npm run dev:talk -- --ai off          强制本地模拟器");
+  out("  npm run dev:talk -- --stream on       强制流式输出（默认跟随 OPENAI_STREAM）");
   out("  npm run dev:talk -- --verbose         打印导演更新等调试细节");
   out("");
   printHelp();
@@ -778,6 +825,9 @@ async function runCommand(st: TalkState, raw: string): Promise<void> {
     case "ai":
       await cmdAi(st, args);
       break;
+    case "stream":
+      cmdStream(args);
+      break;
     case "config":
       await printConfig(st);
       break;
@@ -804,6 +854,13 @@ async function printBanner(st: TalkState): Promise<void> {
     dim(
       `实时 AI：${
         live ? "已启用（未配置 key 的模块自动回落模拟器）" : "未配置 key —— 全部走本地模拟器"
+      }`,
+    ),
+  );
+  out(
+    dim(
+      `流式输出：${
+        isStreamEnabled() ? "开启（女主台词逐字上屏）" : "关闭（整句输出；/stream on 或 --stream on 开启）"
       }`,
     ),
   );
@@ -836,6 +893,10 @@ async function oneShot(st: TalkState, message: string): Promise<void> {
 async function main(): Promise<void> {
   const opts = parseArgs(process.argv.slice(2));
   useLiveAI = opts.ai !== "off";
+  // --stream 强制开关流式：底层 completeJSON 通过 OPENAI_STREAM 环境变量判断，
+  // 这里在发起请求前改写 env 即可复用同一套逻辑（auto = 跟随 .env 的值）。
+  if (opts.stream === "on") process.env.OPENAI_STREAM = "1";
+  else if (opts.stream === "off") delete process.env.OPENAI_STREAM;
 
   const characters = CHARACTER_SEEDS.map(buildCharacter);
   const st: TalkState = {

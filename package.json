@@ -7,6 +7,8 @@
     "start": "next start",
     "start:local": "bash scripts/start.sh dev",
     "start:local:prod": "bash scripts/start.sh build",
+    "restart": "bash scripts/restart.sh",
+    "restart:prod": "bash scripts/restart.sh prod",
     "dev:talk": "tsx scripts/talk.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
