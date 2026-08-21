@@ -81,6 +81,9 @@ export async function GET() {
       persona: c.persona,
       defaultPersona: CHARACTER_SEEDS.find((s) => s.id === c.id)?.persona ?? "",
     })),
+    sfw: {
+      enabled: stored["sfw.mode"] === "1",
+    },
   });
 }
 

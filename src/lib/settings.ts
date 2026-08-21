@@ -31,7 +31,17 @@ export const ASSET_SETTING_KEYS = [
   "asset.bg.park",
   "asset.bg.library",
 ];
-export const ALL_SETTING_KEYS = [...AI_SETTING_KEYS, ...PROMPT_SETTING_KEYS, ...ASSET_SETTING_KEYS];
+
+// SFW (safe-for-work) mode: when enabled, every character sprite (立绘) in the
+// game is replaced by a neutral default placeholder. Stored as "1" / "" ("" = off).
+export const SFW_MODE_KEY = "sfw.mode";
+
+export const ALL_SETTING_KEYS = [
+  ...AI_SETTING_KEYS,
+  ...PROMPT_SETTING_KEYS,
+  ...ASSET_SETTING_KEYS,
+  SFW_MODE_KEY,
+];
 
 export async function getSettings(keys?: string[]): Promise<SettingsMap> {
   const rows = keys
@@ -85,4 +95,10 @@ export async function getEffectiveBackgrounds(): Promise<Record<string, string>>
 export async function getEffectiveTitleBg(): Promise<string> {
   const stored = await getSettings(["asset.titleBg"]);
   return stored["asset.titleBg"] || DEFAULT_TITLE_BG;
+}
+
+/** True when SFW mode is enabled ("1"), false otherwise. */
+export async function getSfwMode(): Promise<boolean> {
+  const map = await getSettings([SFW_MODE_KEY]);
+  return map[SFW_MODE_KEY] === "1";
 }

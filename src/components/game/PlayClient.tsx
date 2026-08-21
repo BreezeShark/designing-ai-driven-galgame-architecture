@@ -8,6 +8,9 @@ import { useTypewriter } from "@/lib/hooks/useTypewriter";
 
 const ROLE_ORDER: Record<string, number> = { narrator: 0, choice: 1, player: 2, character: 3 };
 
+// Neutral placeholder used for every 立绘 while SFW mode is enabled.
+export const SFW_PLACEHOLDER = "/images/sfw-placeholder.svg";
+
 export function PlayClient(props: { initialState: FullState }) {
   const router = useRouter();
   const [state, setState] = useState(props.initialState);
@@ -16,7 +19,10 @@ export function PlayClient(props: { initialState: FullState }) {
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const { save, characterStates, messages, characters, liveAI } = state;
+  const { save, characterStates, messages, characters, liveAI, sfwMode } = state;
+
+  // SFW mode: every character sprite falls back to the neutral placeholder.
+  const portraitFor = (url: string): string => (sfwMode ? SFW_PLACEHOLDER : url);
 
   const activeState = useMemo(
     () => characterStates.find((c) => c.characterId === save.activeCharacterId) ?? null,
@@ -84,7 +90,7 @@ export function PlayClient(props: { initialState: FullState }) {
       {/* Character portrait */}
       {save.phase === "dialogue" && activeCharacter && (
         <div key={activeCharacter.id} className="absolute bottom-[30%] right-[4%] z-10 h-[62%] w-[38%] animate-[popin_0.35s_ease] sm:right-[8%]">
-          <img src={activeCharacter.avatarUrl} alt={activeCharacter.name} className="h-full w-full object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]" />
+          <img src={portraitFor(activeCharacter.avatarUrl)} alt={activeCharacter.name} className="h-full w-full object-contain drop-shadow-[0_20px_40px_rgba(0,0,0,0.5)]" />
         </div>
       )}
 
@@ -112,7 +118,7 @@ export function PlayClient(props: { initialState: FullState }) {
               style={{ boxShadow: cs.characterId === save.activeCharacterId ? `0 0 0 2px ${cs.character.accentColor}55` : undefined }}
             >
               <span className="h-6 w-6 overflow-hidden rounded-full border border-white/30">
-                <img src={cs.character.avatarUrl} alt="" className="h-full w-full object-cover object-top" />
+                <img src={portraitFor(cs.character.avatarUrl)} alt="" className="h-full w-full object-cover object-top" />
               </span>
               <span className="hidden text-xs text-white sm:inline">{cs.character.name}</span>
               <span className="flex items-center gap-0.5 text-[10px] text-pink-200">

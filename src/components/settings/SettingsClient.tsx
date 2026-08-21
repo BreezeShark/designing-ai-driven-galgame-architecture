@@ -43,6 +43,7 @@ type SettingsPayload = {
     backgrounds: Record<string, AssetSlot>;
   };
   characters: CharacterInfo[];
+  sfw: { enabled: boolean };
 };
 
 const SCOPE_META: { id: string; label: string; desc: string }[] = [
@@ -121,12 +122,18 @@ export function SettingsClient() {
   const [uploadingAsset, setUploadingAsset] = useState("");
   const [assetNotice, setAssetNotice] = useState("");
 
+  // ---- SFW mode state ----
+  const [sfwEnabled, setSfwEnabled] = useState(false);
+  const [savingSfw, setSavingSfw] = useState(false);
+  const [sfwNotice, setSfwNotice] = useState("");
+
   async function load() {
     try {
       const res = await fetch("/api/settings");
       if (!res.ok) throw new Error("加载设置失败");
       const payload: SettingsPayload = await res.json();
       setData(payload);
+      setSfwEnabled(payload.sfw.enabled);
       const nextForms: Record<string, ScopeForm> = {};
       for (const meta of SCOPE_META) {
         const s = payload.ai.scopes[meta.id];
@@ -380,6 +387,26 @@ export function SettingsClient() {
     }
   }
 
+  async function saveSfw(enabled: boolean) {
+    setSavingSfw(true);
+    setSfwNotice("");
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { "sfw.mode": enabled ? "1" : "" } }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "保存失败");
+      setSfwEnabled(enabled);
+      setSfwNotice(enabled ? "✓ 已开启 SFW 模式，游戏内所有立绘将替换为默认占位符" : "✓ 已关闭 SFW 模式，立绘恢复显示");
+    } catch (err) {
+      setSfwNotice(err instanceof Error ? err.message : "保存失败");
+    } finally {
+      setSavingSfw(false);
+    }
+  }
+
   if (loadError) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
@@ -423,6 +450,45 @@ export function SettingsClient() {
             ← 返回标题
           </button>
         </div>
+
+        {/* ================= SFW 模式 ================= */}
+        <section className={`${sectionCls} mb-6`}>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white">SFW 模式（安全模式）</h2>
+              <p className="mt-1 max-w-xl text-xs leading-relaxed text-white/50">
+                开启后，游戏内的所有角色立绘都会替换为默认占位符，仅保留头像旁的角色名与好感度。
+                适合在公共场合或直播时游玩。切换立即生效，不需要重新开始游戏。
+              </p>
+            </div>
+            {/* toggle switch */}
+            <button
+              role="switch"
+              aria-checked={sfwEnabled}
+              onClick={() => !savingSfw && saveSfw(!sfwEnabled)}
+              className={`relative h-8 w-16 shrink-0 rounded-full border transition ${
+                sfwEnabled ? "border-pink-400 bg-pink-500/70" : "border-white/25 bg-black/40"
+              }`}
+            >
+              <span
+                className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                  sfwEnabled ? "left-9" : "left-1"
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                sfwEnabled ? "bg-pink-500/25 text-pink-200" : "bg-white/10 text-white/50"
+              }`}
+            >
+              {sfwEnabled ? "● 已开启" : "○ 已关闭"}
+            </span>
+            {savingSfw && <span className="text-xs text-white/50">保存中…</span>}
+            {sfwNotice && <span className="text-xs text-emerald-300">{sfwNotice}</span>}
+          </div>
+        </section>
 
         {/* ================= AI 接入 ================= */}
         <section className={sectionCls}>

@@ -17,7 +17,7 @@ import { getDirectorUpdate } from "@/lib/ai/director";
 import { updateMemorySummary } from "@/lib/ai/memory";
 import type { DirectorUpdate, HistoryItem } from "@/lib/ai/types";
 import { isLiveAIEnabled } from "@/lib/ai/client";
-import { getEffectiveBackgrounds } from "@/lib/settings";
+import { getEffectiveBackgrounds, getSfwMode } from "@/lib/settings";
 
 export class GameError extends Error {}
 
@@ -68,6 +68,8 @@ export type FullState = {
   liveAI: boolean;
   /** backgroundKey → image URL, with user overrides from the settings page. */
   backgrounds: Record<string, string>;
+  /** True when SFW mode is on: all 立绘 are replaced by the default placeholder. */
+  sfwMode: boolean;
 };
 
 function mapHistory(rows: MessageRow[]): HistoryItem[] {
@@ -132,6 +134,7 @@ export async function getFullState(saveId: number): Promise<FullState | null> {
     characters: chars,
     liveAI: await isLiveAIEnabled(),
     backgrounds: await getEffectiveBackgrounds(),
+    sfwMode: await getSfwMode(),
   };
 }
 
