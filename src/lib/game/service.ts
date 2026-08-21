@@ -242,7 +242,11 @@ export async function deleteSave(saveId: number): Promise<void> {
   await db.delete(saves).where(eq(saves.id, saveId));
 }
 
-export async function sendPlayerMessage(saveId: number, content: string): Promise<FullState> {
+export async function sendPlayerMessage(
+  saveId: number,
+  content: string,
+  options?: { onDelta?: (delta: string) => void },
+): Promise<FullState> {
   const trimmed = content.trim();
   if (!trimmed) throw new GameError("消息不能为空");
 
@@ -272,6 +276,7 @@ export async function sendPlayerMessage(saveId: number, content: string): Promis
     playerName: save.playerName,
     location: save.location,
     timeOfDay: save.timeOfDay,
+    onDelta: options?.onDelta,
   });
 
   const newAffection = clamp(state.affection + result.affectionDelta, 0, 100);
