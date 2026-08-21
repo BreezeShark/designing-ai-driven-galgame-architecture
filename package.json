@@ -5,6 +5,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:local": "bash scripts/start.sh dev",
+    "start:local:prod": "bash scripts/start.sh build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "cutout": "bash scripts/cutout.sh"

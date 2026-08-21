@@ -42,15 +42,35 @@ OpenAI 兼容的接入点后，AI 会接管所有对话与剧情，无需改动�
 ### 0. 环境要求
 
 - Node.js 18+
-- PostgreSQL（本地或云端均可）
+- Docker（推荐，脚本会自动拉取 postgres:16）或本机 / 云端 PostgreSQL
 
-### 1. 安装依赖
+### 1. 一键部署（推荐）
+
+不用手动装依赖、配数据库、建表，一条命令全部搞定：
+
+```bash
+npm run start:local          # 开发模式：装依赖 → 起数据库 → 建表 → 启动
+npm run start:local:prod     # 生产模式：构建 + 启动
+```
+
+也可以直接调用脚本并指定数据库来源：
+
+```bash
+bash scripts/start.sh dev --docker   # 数据库用 Docker（postgres:16）
+bash scripts/start.sh dev --local    # 数据库用本机 PostgreSQL
+```
+
+脚本会自动完成：Node 版本检查 → 数据库准备（已有可用的 `DATABASE_URL` 直接复用；
+否则优先 Docker postgres:16，没有 Docker 则退回本机 PostgreSQL）→ 生成 / 更新 `.env`
+→ 缺依赖时 `npm install` → `drizzle-kit push` 建表 → 启动服务器（http://localhost:3000）。
+
+### 2. 手动安装依赖
 
 ```bash
 npm install
 ```
 
-### 2. 配置数据库
+### 3. 手动配置数据库
 
 复制环境变量模板并填入你的数据库连接串：
 
@@ -67,7 +87,7 @@ cp .env.example .env
 > `docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=app_db postgres`
 > 快速起一个。
 
-### 3. 启动开发服务器
+### 4. 启动开发服务器
 
 ```bash
 npm run dev
@@ -75,7 +95,7 @@ npm run dev
 
 浏览器打开 http://localhost:3000 即可开始游戏。
 
-### 4. （可选）接入真实 AI
+### 5. （可选）接入真实 AI
 
 **方式一：环境变量**（编辑 `.env`）
 
@@ -196,6 +216,8 @@ OPENAI_MODEL=gpt-4o-mini                    # 可选
 | 命令 | 说明 |
 | --- | --- |
 | `npm run dev` | 启动开发服务器 |
+| `npm run start:local` | 一键本地部署：自动装依赖 / 起数据库 / 建表 / 启动开发服务器 |
+| `npm run start:local:prod` | 一键本地部署：生产构建 + 启动 |
 | `npm run build` | 生产构建 |
 | `npm start` | 启动生产服务器 |
 | `npm run lint` | ESLint 检查 |
