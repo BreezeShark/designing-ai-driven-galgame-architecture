@@ -16,11 +16,14 @@ type EffectiveScope = {
   apiKey: { set: boolean; preview?: string; source?: string; level?: string };
 };
 
+type SpriteItem = { url: string; label: string };
+
 type CharacterInfo = {
   id: string;
   name: string;
   subtitle: string;
   avatarUrl: string;
+  sprites: SpriteItem[];
   accentColor: string;
   speechStyle: string;
   persona: string;
@@ -68,6 +71,8 @@ type CharForm = {
   subtitle: string;
   accentColor: string;
   avatarUrl: string;
+  /** 立绘库：AI 导演会按场景从中挑一张 */
+  sprites: SpriteItem[];
 };
 
 const EMPTY_NEW_CHAR: CharForm = {
@@ -77,6 +82,7 @@ const EMPTY_NEW_CHAR: CharForm = {
   subtitle: "",
   accentColor: "#f472b6",
   avatarUrl: "",
+  sprites: [],
 };
 
 async function uploadImage(file: File): Promise<string> {
@@ -151,6 +157,7 @@ export function SettingsClient() {
           subtitle: c.subtitle,
           accentColor: c.accentColor,
           avatarUrl: c.avatarUrl,
+          sprites: c.sprites ?? [],
         };
       }
       setCharForms(nextChar);
@@ -278,24 +285,77 @@ export function SettingsClient() {
     }
   }
 
-  async function uploadCharAvatar(id: string, file: File) {
+  /** Upload an extra 立绘 into a heroine's sprite library (saved immediately). */
+  async function addCharSprite(id: string, file: File) {
     setSavingChar(id);
     setCharNotice((prev) => ({ ...prev, [id]: "上传中…" }));
     try {
       const url = await uploadImage(file);
-      setCharForms((p) => ({ ...p, [id]: { ...p[id], avatarUrl: url } }));
-      const res = await fetch(`/api/characters/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ avatarUrl: url }),
-      });
-      if (!res.ok) throw new Error((await res.json()).error || "保存失败");
-      setCharNotice((prev) => ({ ...prev, [id]: "✓ 立绘已更新" }));
+      const current = charForms[id];
+      const sprites = [...(current?.sprites ?? []), { url, label: `立绘${(current?.sprites?.length ?? 0) + 1}` }];
+      const avatarUrl = current?.avatarUrl || url;
+      setCharForms((p) => ({ ...p, [id]: { ...p[id], sprites, avatarUrl } }));
+      await persistSprites(id, sprites, avatarUrl);
+      setCharNotice((prev) => ({ ...prev, [id]: "✓ 已加入立绘库" }));
     } catch (err) {
       setCharNotice((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : "上传失败" }));
     } finally {
       setSavingChar("");
     }
+  }
+
+  async function persistSprites(id: string, sprites: SpriteItem[], avatarUrl: string) {
+    const res = await fetch(`/api/characters/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sprites, avatarUrl }),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || "保存失败");
+  }
+
+  /** Remove one 立绘 from the library. */
+  async function removeCharSprite(id: string, url: string) {
+    const current = charForms[id];
+    if (!current) return;
+    if ((current.sprites ?? []).length <= 1) {
+      setCharNotice((prev) => ({ ...prev, [id]: "至少要保留一张立绘" }));
+      return;
+    }
+    const sprites = current.sprites.filter((s) => s.url !== url);
+    const avatarUrl = current.avatarUrl === url ? sprites[0].url : current.avatarUrl;
+    setCharForms((p) => ({ ...p, [id]: { ...p[id], sprites, avatarUrl } }));
+    setSavingChar(id);
+    try {
+      await persistSprites(id, sprites, avatarUrl);
+      setCharNotice((prev) => ({ ...prev, [id]: "✓ 立绘已删除" }));
+    } catch (err) {
+      setCharNotice((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : "删除失败" }));
+    } finally {
+      setSavingChar("");
+    }
+  }
+
+  /** Pick the 立绘 used as the default portrait (avatar / fallback sprite). */
+  async function setDefaultSprite(id: string, url: string) {
+    const current = charForms[id];
+    if (!current) return;
+    setCharForms((p) => ({ ...p, [id]: { ...p[id], avatarUrl: url } }));
+    setSavingChar(id);
+    try {
+      await persistSprites(id, current.sprites, url);
+      setCharNotice((prev) => ({ ...prev, [id]: "✓ 已设为默认立绘" }));
+    } catch (err) {
+      setCharNotice((prev) => ({ ...prev, [id]: err instanceof Error ? err.message : "保存失败" }));
+    } finally {
+      setSavingChar("");
+    }
+  }
+
+  function setSpriteLabel(id: string, url: string, label: string) {
+    setCharForms((p) => ({
+      ...p,
+      [id]: { ...p[id], sprites: p[id].sprites.map((s) => (s.url === url ? { ...s, label } : s)) },
+    }));
   }
 
   async function deleteCharacter(id: string, name: string) {
@@ -845,14 +905,14 @@ export function SettingsClient() {
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1.5">
                       <label className={`${btnGhost} cursor-pointer`}>
-                        更换立绘
+                        添加立绘
                         <input
                           type="file"
                           accept="image/*"
                           className="hidden"
                           onChange={(e) => {
                             const file = e.target.files?.[0];
-                            if (file) uploadCharAvatar(c.id, file);
+                            if (file) addCharSprite(c.id, file);
                             e.target.value = "";
                           }}
                         />
@@ -874,6 +934,84 @@ export function SettingsClient() {
                         </button>
                       </div>
                     </div>
+                  </div>
+
+                  {/* 立绘库：AI 导演按场景挑图 */}
+                  <div className="mt-4">
+                    <label className={labelCls}>
+                      立绘库（共 {f.sprites.length} 张 · AI 会按场景自动挑选）
+                    </label>
+                    <p className="mb-2 text-[11px] leading-relaxed text-white/45">
+                      给每张立绘写一句描述（例如「校服 · 微笑」「居家 · 夜晚」「泳装 · 海边」），
+                      剧情导演会依据当前场景、时间与氛围选出最贴切的一张；描述写得越具体，挑得越准。
+                      标记为「默认」的那张用于头像与兜底显示。
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">
+                      {f.sprites.map((sp) => {
+                        const isDefault = sp.url === f.avatarUrl;
+                        return (
+                          <div
+                            key={sp.url}
+                            className={`group relative overflow-hidden rounded-lg border bg-black/40 ${
+                              isDefault ? "border-pink-400/70" : "border-white/10"
+                            }`}
+                          >
+                            <div className="relative h-24 w-full">
+                              <img src={sp.url} alt={sp.label} className="h-full w-full object-cover object-top" />
+                              <button
+                                title="删除这张立绘"
+                                onClick={() => removeCharSprite(c.id, sp.url)}
+                                disabled={savingChar === c.id}
+                                className="absolute right-1 top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-black/70 text-xs text-red-300 hover:bg-red-500/70 hover:text-white group-hover:flex"
+                              >
+                                ×
+                              </button>
+                              {isDefault ? (
+                                <span className="absolute bottom-1 left-1 rounded-full bg-pink-500/85 px-1.5 py-0.5 text-[10px] text-white">
+                                  默认
+                                </span>
+                              ) : (
+                                <button
+                                  onClick={() => setDefaultSprite(c.id, sp.url)}
+                                  disabled={savingChar === c.id}
+                                  className="absolute bottom-1 left-1 hidden rounded-full bg-black/70 px-1.5 py-0.5 text-[10px] text-white/80 hover:bg-white/25 group-hover:block"
+                                >
+                                  设为默认
+                                </button>
+                              )}
+                            </div>
+                            <input
+                              value={sp.label}
+                              onChange={(e) => setSpriteLabel(c.id, sp.url, e.target.value)}
+                              placeholder="描述"
+                              className="w-full border-t border-white/10 bg-black/50 px-1.5 py-1 text-[11px] text-white/80 outline-none focus:bg-black/70"
+                            />
+                          </div>
+                        );
+                      })}
+                      <label
+                        className={`flex h-[calc(6rem+26px)] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-white/20 text-[11px] text-white/50 transition hover:border-pink-400/50 hover:text-white/80 ${
+                          savingChar === c.id ? "opacity-50" : ""
+                        }`}
+                      >
+                        <span className="text-lg leading-none">＋</span>
+                        添加立绘
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={savingChar === c.id}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) addCharSprite(c.id, file);
+                            e.target.value = "";
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="mt-1.5 text-[11px] text-white/40">
+                      修改描述后点下方「保存」生效；上传 / 删除 / 设为默认会立即保存。
+                    </p>
                   </div>
 
                   <div className="mt-3">

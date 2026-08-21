@@ -7,6 +7,7 @@ import { resolveAIConfig, type AIScope } from "@/lib/ai/client";
 import { DEFAULT_DIRECTOR_PROMPT, DEFAULT_MEMORY_PROMPT } from "@/lib/ai/prompts";
 import { CHARACTER_SEEDS, BACKGROUND_IMAGES } from "@/lib/data/characters";
 import { ensureCharactersSeeded } from "@/lib/game/service";
+import { effectiveSprites } from "@/lib/data/sprite-scan";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,8 @@ export async function GET() {
       name: c.name,
       subtitle: c.subtitle,
       avatarUrl: c.avatarUrl,
+      // Whole 立绘 library — the director AI picks one of these per scene.
+      sprites: effectiveSprites(c),
       accentColor: c.accentColor,
       speechStyle: c.speechStyle,
       persona: c.persona,

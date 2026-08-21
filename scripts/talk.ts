@@ -88,7 +88,7 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 function buildCharacter(seed: (typeof CHARACTER_SEEDS)[number]): Character {
-  return { ...seed, createdAt: new Date() };
+  return { ...seed, sprites: [{ url: seed.avatarUrl, label: "默认立绘" }], createdAt: new Date() };
 }
 
 function buildSave(): Save {
@@ -103,6 +103,7 @@ function buildSave(): Save {
     timeOfDay: "morning",
     backgroundKey: "classroom",
     presentCharacterIds: [],
+    characterSprites: {},
     activeCharacterId: null,
     pendingChoices: null,
     storySummary: "",
@@ -188,17 +189,24 @@ async function directorUpdate(
 ): Promise<DirectorUpdate> {
   if (!useLiveAI) {
     const names = namesOf(st);
-    if (params.trigger === "start") return simulateDirectorStart(names);
+    // The terminal client has no artwork, so sprites stay empty offline.
+    if (params.trigger === "start") return { ...simulateDirectorStart(names), characterSprites: {} };
     if (params.trigger === "choice" && params.chosenChoice) {
-      return simulateDirectorChoice({
-        chapter: st.save.chapter,
-        chosenChoiceId: params.chosenChoice.id,
-        currentPresent: st.save.presentCharacterIds,
-        names,
-      });
+      return {
+        ...simulateDirectorChoice({
+          chapter: st.save.chapter,
+          chosenChoiceId: params.chosenChoice.id,
+          currentPresent: st.save.presentCharacterIds,
+          names,
+        }),
+        characterSprites: {},
+      };
     }
     const totalAffection = [...st.states.values()].reduce((sum, s) => sum + s.affection, 0);
-    return simulateDirectorAdvance({ chapter: st.save.chapter, names, totalAffection });
+    return {
+      ...simulateDirectorAdvance({ chapter: st.save.chapter, names, totalAffection }),
+      characterSprites: {},
+    };
   }
   const update = await getDirectorUpdate({
     trigger: params.trigger,

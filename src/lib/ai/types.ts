@@ -12,6 +12,8 @@ export type DirectorUpdate = {
   backgroundKey: string;
   timeOfDay: string;
   presentCharacterIds: string[];
+  /** characterId → sprite URL picked by the director for this scene. */
+  characterSprites: Record<string, string>;
   choices: PendingChoice[] | null;
   phase: "narration" | "dialogue" | "ended";
   activeCharacterId: string | null;

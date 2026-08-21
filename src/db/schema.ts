@@ -21,11 +21,20 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
 // Characters: static definitions of the AI-driven heroines.
 // Each character has its own "persona" system prompt used by the character AI.
 // ---------------------------------------------------------------------------
+/**
+ * One selectable 立绘 (sprite) of a heroine. `label` is a short human/AI
+ * readable description ("校服 · 微笑") that the director AI uses to pick the
+ * most fitting sprite for the current scene.
+ */
+export type CharacterSprite = { url: string; label: string };
+
 export const characters = pgTable("characters", {
   id: text("id").primaryKey(), // slug, e.g. "linzhiyuan"
   name: text("name").notNull(),
   subtitle: text("subtitle").notNull().default(""), // relationship / role tag
-  avatarUrl: text("avatar_url").notNull().default(""),
+  avatarUrl: text("avatar_url").notNull().default(""), // default sprite
+  // Full sprite library; the director AI picks one per scene.
+  sprites: jsonb("sprites").$type<CharacterSprite[]>().notNull().default([]),
   accentColor: text("accent_color").notNull().default("#f472b6"),
   persona: text("persona").notNull(), // system prompt describing personality
   speechStyle: text("speech_style").notNull().default(""),
@@ -51,6 +60,8 @@ export const saves = pgTable("saves", {
   timeOfDay: text("time_of_day").notNull().default("afternoon"),
   backgroundKey: text("background_key").notNull().default("classroom"),
   presentCharacterIds: jsonb("present_character_ids").$type<string[]>().notNull().default([]),
+  // characterId → sprite URL chosen by the director AI for the current scene.
+  characterSprites: jsonb("character_sprites").$type<Record<string, string>>().notNull().default({}),
   activeCharacterId: text("active_character_id"),
   pendingChoices: jsonb("pending_choices").$type<PendingChoice[] | null>().default(null),
   storySummary: text("story_summary").notNull().default(""),

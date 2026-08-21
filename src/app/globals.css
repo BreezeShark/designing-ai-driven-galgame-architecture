@@ -9,3 +9,21 @@
   from { opacity: 0; transform: translateY(16px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* Character sprite entering the stage: rises slightly from the bottom edge. */
+@keyframes spritein {
+  from { opacity: 0; transform: translateY(3%) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Choice dialog sliding up from the bottom of the screen. */
+@keyframes slideup {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Soft breathing halo on the "show choices" button so it can't be missed. */
+@keyframes choicepulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 114, 182, 0.55); }
+  50% { box-shadow: 0 0 0 10px rgba(244, 114, 182, 0); }
+}

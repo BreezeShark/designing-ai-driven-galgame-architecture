@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { characters } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { ensureCharactersSeeded } from "@/lib/game/service";
+import { parseSprites } from "@/lib/data/sprites";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
   const avatarUrl = typeof body.avatarUrl === "string" ? body.avatarUrl.trim().slice(0, 300) : "";
   const accentColor =
     typeof body.accentColor === "string" && HEX_COLOR.test(body.accentColor) ? body.accentColor : "#f472b6";
+  // Optional 立绘 library; the director AI picks one of these per scene.
+  const sprites = parseSprites(body.sprites) ?? [];
 
   const [{ maxOrder }] = await db
     .select({ maxOrder: characters.sortOrder })
@@ -47,7 +50,11 @@ export async function POST(req: Request) {
       subtitle,
       speechStyle,
       persona,
-      avatarUrl: avatarUrl || "/images/char-placeholder.svg",
+      avatarUrl: avatarUrl || sprites[0]?.url || "/images/char-placeholder.svg",
+      sprites:
+        sprites.length > 0
+          ? sprites
+          : [{ url: avatarUrl || "/images/char-placeholder.svg", label: "默认立绘" }],
       accentColor,
       sortOrder: (maxOrder ?? 0) + 1,
     })
